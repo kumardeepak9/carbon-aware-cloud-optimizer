@@ -1,0 +1,96 @@
+# =============================================================================
+# Carbon-Aware Cloud Optimizer — Local Development Stack
+# =============================================================================
+# Spins up: GreenOps agent, Prometheus, Grafana, Pushgateway
+# Usage:
+#   docker compose up -d          # start
+#   docker compose logs -f agent  # stream agent logs
+#   docker compose down           # stop
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # GreenOps AI Agent
+  # ---------------------------------------------------------------------------
+  agent:
+    build:
+      context: .
+      dockerfile: docker/agent.Dockerfile
+    env_file: .env
+    environment:
+      - K8S_IN_CLUSTER=false
+      - PROMETHEUS_PUSHGATEWAY_URL=http://pushgateway:9091
+    ports:
+      - "8000:8000"    # Pull-based metrics endpoint
+    depends_on:
+      - prometheus
+      - pushgateway
+    restart: unless-stopped
+    networks:
+      - greenops
+
+  # ---------------------------------------------------------------------------
+  # Prometheus
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - greenops
+
+  # ---------------------------------------------------------------------------
+  # Prometheus Pushgateway (for batch/agent metrics)
+  # ---------------------------------------------------------------------------
+  pushgateway:
+    image: prom/pushgateway:v1.8.0
+    ports:
+      - "9091:9091"
+    restart: unless-stopped
+    networks:
+      - greenops
+
+  # ---------------------------------------------------------------------------
+  # Grafana
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.4.3
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - greenops
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+volumes:
+  prometheus_data:
+  grafana_data:
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+networks:
+  greenops:
+    driver: bridge
