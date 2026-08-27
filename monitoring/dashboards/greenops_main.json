@@ -1,0 +1,1010 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "enable": true,
+        "expr": "changes(kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"}[1m]) > 0",
+        "hide": false,
+        "iconColor": "rgba(255, 152, 48, 1)",
+        "name": "⚡ Scale Events",
+        "step": "60s",
+        "titleFormat": "Scale Event",
+        "textFormat": "Replicas changed — carbon was {{carbon_intensity}} gCO₂/kWh"
+      }
+    ]
+  },
+  "description": "GreenOps AI — Correlates electrical grid carbon intensity with Kubernetes workload scaling and application performance. Answers: 'What was the carbon condition when the workload scaled?' and 'Did performance remain healthy after an optimization?'",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+
+    { "id": 1, "type": "row", "title": "🌍 Carbon Signal", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Carbon Intensity (gCO₂/kWh)",
+      "description": "Real-time grid carbon intensity from Electricity Maps.\n• < 100  → low carbon (scale-up permitted)\n• 100–250 → medium (hold)\n• > 250  → high carbon (scale-down territory)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "greenops_carbon_intensity_gco2_per_kwh{zone=\"$zone\"}",
+          "legendFormat": "gCO₂/kWh",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "colorMode": "background",
+        "graphMode": "area",
+        "orientation": "auto",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 250 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Carbon Data Available",
+      "description": "1 = Electricity Maps data is fresh. 0 = fetch failed or data is stale.",
+      "gridPos": { "h": 4, "w": 4, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "greenops_carbon_data_available{zone=\"$zone\"}",
+          "legendFormat": "available",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "colorMode": "background",
+        "graphMode": "none",
+        "orientation": "auto",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "text": "UNAVAILABLE", "color": "red" }, "1": { "text": "AVAILABLE", "color": "green" } }, "type": "value" }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Data Freshness",
+      "description": "Time since Electricity Maps last updated. Alert fires if > 10 min.",
+      "gridPos": { "h": 4, "w": 4, "x": 10, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "time() - greenops_carbon_last_update_timestamp_seconds{zone=\"$zone\"}",
+          "legendFormat": "age",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "colorMode": "background",
+        "graphMode": "none",
+        "orientation": "auto",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 300 },
+              { "color": "red", "value": 600 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Renewable Energy %",
+      "description": "Percentage of electricity generation from renewable sources. Requires Electricity Maps paid tier.",
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "greenops_carbon_renewable_percentage{zone=\"$zone\"}",
+          "legendFormat": "renewable %",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "colorMode": "background",
+        "graphMode": "none",
+        "orientation": "auto",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percent",
+          "min": 0, "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "green", "value": 60 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Fossil Fuel %",
+      "description": "Percentage of electricity generation from fossil fuels. Lower is greener.",
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "greenops_carbon_fossil_fuel_percentage{zone=\"$zone\"}",
+          "legendFormat": "fossil %",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "colorMode": "background",
+        "graphMode": "none",
+        "orientation": "auto",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percent",
+          "min": 0, "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "red", "value": 60 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 7,
+      "type": "row",
+      "title": "⚡ Carbon × Scale Correlation — 'What was the carbon condition when the workload scaled?'",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
+    },
+
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Carbon Intensity vs Replica Count",
+      "description": "Primary correlation panel. Orange vertical lines mark scale events (replica count changes). Left axis = carbon intensity (gCO₂/kWh). Right axis = replica count. Answers: 'What was the carbon condition when the workload scaled?'",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "greenops_carbon_intensity_gco2_per_kwh{zone=\"$zone\"}",
+          "legendFormat": "Carbon Intensity (gCO₂/kWh)",
+          "refId": "A"
+        },
+        {
+          "expr": "kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "legendFormat": "Replica Count",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last", "min", "max"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Carbon Intensity (gCO₂/kWh)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "semi-dark-orange", "mode": "fixed" } },
+              { "id": "custom.lineWidth", "value": 2 },
+              { "id": "custom.fillOpacity", "value": 15 },
+              { "id": "custom.axisLabel", "value": "gCO₂/kWh" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 100 },
+                    { "color": "red", "value": 250 }
+                  ]
+                }
+              },
+              { "id": "custom.thresholdsStyle", "value": { "mode": "area" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Replica Count" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "#5794F2", "mode": "fixed" } },
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "custom.axisLabel", "value": "Replicas" },
+              { "id": "custom.lineWidth", "value": 3 },
+              { "id": "custom.fillOpacity", "value": 20 },
+              { "id": "custom.drawStyle", "value": "line" },
+              { "id": "custom.lineInterpolation", "value": "stepAfter" },
+              { "id": "unit", "value": "short" },
+              { "id": "decimals", "value": 0 },
+              { "id": "custom.axisColorMode", "value": "series" }
+            ]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 9,
+      "type": "row",
+      "title": "🌱 Carbon History & Energy Mix",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 }
+    },
+
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Carbon Intensity Over Time",
+      "description": "Historical carbon intensity with threshold bands showing low/medium/high zones.",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "greenops_carbon_intensity_gco2_per_kwh{zone=\"$zone\"}",
+          "legendFormat": "Carbon Intensity",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "single", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "mean", "min", "max"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "scheme",
+            "showPoints": "never",
+            "thresholdsStyle": { "mode": "area" }
+          },
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 250 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Energy Mix Over Time (Renewable / Fossil / Low-Carbon %)",
+      "description": "Breakdown of grid generation sources. Only available with Electricity Maps paid API tier.",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "greenops_carbon_renewable_percentage{zone=\"$zone\"}",
+          "legendFormat": "Renewable %",
+          "refId": "A"
+        },
+        {
+          "expr": "greenops_carbon_fossil_fuel_percentage{zone=\"$zone\"}",
+          "legendFormat": "Fossil Fuel %",
+          "refId": "B"
+        },
+        {
+          "expr": "greenops_carbon_low_carbon_percentage{zone=\"$zone\"}",
+          "legendFormat": "Low-Carbon % (incl. nuclear)",
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "gradientMode": "none", "showPoints": "never" },
+          "unit": "percent",
+          "min": 0, "max": 100
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Renewable %" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Fossil Fuel %" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Low-Carbon % (incl. nuclear)" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 12,
+      "type": "row",
+      "title": "🔄 Workload Health",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 }
+    },
+
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Ready Replicas",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "kube_deployment_status_replicas_ready{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "legendFormat": "ready",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "auto",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 2 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Desired Replicas",
+      "description": "Replica count set in the Deployment spec. The GreenOps agent modifies this value.",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "legendFormat": "desired",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "auto",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#5794F2" },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 15,
+      "type": "gauge",
+      "title": "Pod Availability Ratio",
+      "description": "ready / desired. Must be 1.0 before agent can scale down. Below 0.5 = critical.",
+      "gridPos": { "h": 4, "w": 5, "x": 8, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "kube_deployment_status_replicas_ready{namespace=\"$namespace\",deployment=\"$deployment\"} / kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "legendFormat": "availability",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "percentunit",
+          "min": 0, "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Pod Restart Rate",
+      "description": "Container restarts in the last 5 min. Any restarts block agent scale-down.",
+      "gridPos": { "h": 4, "w": 5, "x": 13, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"$deployment-.*\"}[5m]))",
+          "legendFormat": "restarts/s",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+        "colorMode": "background",
+        "graphMode": "none",
+        "orientation": "auto",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.001 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Replica Count Over Time",
+      "description": "Desired vs ready replica count. Divergence indicates a rollout or pod failure.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "legendFormat": "Desired",
+          "refId": "A"
+        },
+        {
+          "expr": "kube_deployment_status_replicas_ready{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "legendFormat": "Ready",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 5, "showPoints": "never", "lineInterpolation": "stepAfter" },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Desired" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#5794F2", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Ready" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 18,
+      "type": "row",
+      "title": "🚀 Application Performance — 'Did performance remain healthy after optimization?'",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 }
+    },
+
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "HTTP Request Rate (req/s)",
+      "description": "Total request rate across all workload pods. Sudden drops after scale-down indicate under-provisioning.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\"}[2m]))",
+          "legendFormat": "Total req/s",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",status_code=~\"2..\"}[2m]))",
+          "legendFormat": "2xx req/s",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",status_code=~\"5..\"}[2m]))",
+          "legendFormat": "5xx req/s",
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last", "mean"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "showPoints": "never" },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "5xx req/s" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "2xx req/s" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "HTTP Response Latency (P99 & P50)",
+      "description": "P99 > 1s blocks agent scale-down. P50 is the typical user experience. Watch for latency spikes after replica reduction.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(greenops_demo_http_request_duration_seconds_bucket{namespace=\"$namespace\"}[2m])) by (le))",
+          "legendFormat": "P99 Latency",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(greenops_demo_http_request_duration_seconds_bucket{namespace=\"$namespace\"}[2m])) by (le))",
+          "legendFormat": "P50 Latency",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last", "mean", "max"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "showPoints": "never" },
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "red", "value": 1.0 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "P99 Latency" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+              { "id": "custom.thresholdsStyle", "value": { "mode": "dashed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "P50 Latency" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "HTTP Error Rate (5xx)",
+      "description": "Any non-zero error rate blocks agent scale-down. Spikes after optimization indicate the workload was under-provisioned for current carbon conditions.",
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 38 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",status_code=~\"5..\"}[2m])) / sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\"}[2m]))",
+          "legendFormat": "Error Ratio (5xx / total)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "single", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "showPoints": "never",
+            "thresholdsStyle": { "mode": "area" }
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "color": { "mode": "fixed", "fixedColor": "red" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 22,
+      "type": "row",
+      "title": "💻 Resource Utilization",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 }
+    },
+
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "CPU Utilization",
+      "description": "CPU cores used vs requested. Request ratio > 1.0 means throttling. Watch post-scale-down for request ratio spike.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$deployment\"}[2m]))",
+          "legendFormat": "CPU Used (cores)",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"$namespace\",pod=~\"$deployment-.*\",resource=\"cpu\"})",
+          "legendFormat": "CPU Requested (cores)",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last", "mean", "max"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "CPU Requested (cores)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 5] } }
+            ]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Memory Utilization",
+      "description": "Working-set memory used vs requested. Memory pressure can cause OOM kills on scale-down.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$deployment\"})",
+          "legendFormat": "Memory Used",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"$namespace\",pod=~\"$deployment-.*\",resource=\"memory\"})",
+          "legendFormat": "Memory Requested",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(kube_pod_container_resource_limits{namespace=\"$namespace\",pod=~\"$deployment-.*\",resource=\"memory\"})",
+          "legendFormat": "Memory Limit",
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last", "mean", "max"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" },
+          "unit": "decbytes"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Memory Requested" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 5] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Memory Limit" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [4, 4] } }
+            ]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 25,
+      "type": "row",
+      "title": "🖥️ Node Utilization (cluster-wide)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 52 }
+    },
+
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "Node CPU Utilization",
+      "description": "Cluster-wide CPU usage ratio (0–1). High node utilization limits the agent's ability to scale up.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 53 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[2m]))",
+          "legendFormat": "CPU Utilization",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "single", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "mean"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "thresholdsStyle": { "mode": "dashed+area" }
+          },
+          "unit": "percentunit",
+          "min": 0, "max": 1,
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.7 },
+              { "color": "red", "value": 0.9 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 27,
+      "type": "timeseries",
+      "title": "Node Memory Available",
+      "description": "Total available memory across all cluster nodes. Low availability prevents workload scale-up.",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 53 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(node_memory_MemAvailable_bytes)",
+          "legendFormat": "Available Memory",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(node_memory_MemTotal_bytes)",
+          "legendFormat": "Total Memory",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" },
+          "unit": "decbytes"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Total Memory" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 5] } }
+            ]
+          }
+        ]
+      }
+    }
+
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["greenops", "carbon", "kubernetes", "sre", "sustainability"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Data Source",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": { "selected": false, "text": "greenops", "value": "greenops" },
+        "hide": 0,
+        "label": "Namespace",
+        "name": "namespace",
+        "options": [{ "selected": true, "text": "greenops", "value": "greenops" }],
+        "query": "greenops",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": { "selected": false, "text": "greenops-demo-workload", "value": "greenops-demo-workload" },
+        "hide": 0,
+        "label": "Deployment",
+        "name": "deployment",
+        "options": [{ "selected": true, "text": "greenops-demo-workload", "value": "greenops-demo-workload" }],
+        "query": "greenops-demo-workload",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": { "selected": false, "text": "DE", "value": "DE" },
+        "hide": 0,
+        "label": "Grid Zone",
+        "name": "zone",
+        "options": [{ "selected": true, "text": "DE", "value": "DE" }],
+        "query": "DE",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "GreenOps AI — Carbon & Operations",
+  "uid": "greenops-main",
+  "version": 1
+}

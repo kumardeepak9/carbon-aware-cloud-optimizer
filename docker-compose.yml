@@ -98,15 +98,27 @@ services:
   # ---------------------------------------------------------------------------
   # Grafana
   # ---------------------------------------------------------------------------
+  # Provisioning auto-loads:
+  #   - Prometheus datasource (uid: prometheus, required for ${DS_PROMETHEUS} templates)
+  #   - GreenOps AI dashboard from monitoring/dashboards/greenops_main.json
+  # Default login: admin / changeme  (override via GRAFANA_ADMIN_PASSWORD in .env)
+  # ---------------------------------------------------------------------------
   grafana:
     image: grafana/grafana:10.4.3
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
       - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/greenops_main.json
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards:ro
+      # Provisioning: datasource config (creates Prometheus datasource automatically)
+      - ./monitoring/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      # Provisioning: dashboard provider config (tells Grafana where to find JSON files)
+      - ./monitoring/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      # Dashboard JSON files (watched by the provider above)
+      - ./monitoring/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3000:3000"
     depends_on:
@@ -114,6 +126,7 @@ services:
     restart: unless-stopped
     networks:
       - greenops
+
 
 # ---------------------------------------------------------------------------
 # Volumes

@@ -1,0 +1,25 @@
+# =============================================================================
+# Grafana Provisioning — Dashboard Provider
+# =============================================================================
+# This file is mounted into the Grafana container at:
+#   /etc/grafana/provisioning/dashboards/provider.yml
+#
+# It tells Grafana to load all *.json files from /var/lib/grafana/dashboards
+# (which is volume-mounted from ./monitoring/dashboards/ in docker-compose.yml).
+#
+# Dashboards auto-reload every 30 seconds — changes to the JSON files are
+# reflected without restarting the container.
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: GreenOps
+    orgId: 1
+    type: file
+    disableDeletion: false         # Allow dashboard deletion from UI (useful for dev)
+    updateIntervalSeconds: 30      # Reload from disk every 30 s
+    allowUiUpdates: true           # Allow UI edits (saves to memory, not disk)
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

@@ -1,0 +1,25 @@
+# =============================================================================
+# Grafana Provisioning — Prometheus Data Source
+# =============================================================================
+# This file is mounted into the Grafana container at:
+#   /etc/grafana/provisioning/datasources/prometheus.yml
+#
+# It creates the "Prometheus" datasource with UID "prometheus" so that
+# dashboard JSON files can reference it as ${DS_PROMETHEUS} without
+# requiring any manual Grafana UI configuration.
+# =============================================================================
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus                              # Must match ${DS_PROMETHEUS} in dashboards
+    url: http://prometheus:9090                  # Docker Compose service name
+    access: proxy
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "15s"                        # Must match global.scrape_interval in prometheus.yml
+      httpMethod: POST
+      exemplarTraceIdDestinations: []
