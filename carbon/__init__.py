@@ -8,6 +8,7 @@ that Prometheus can scrape and store as time-series.
 Public API
 ----------
 CarbonMetricsExporter   Fetches Electricity Maps data and updates metrics.
+CarbonMetricsServer     HTTP exposition server — serves metrics on port 8002.
 CarbonMetrics           Facade grouping all greenops_carbon_* metric objects.
 ElectricityMapsData     Normalised, validated data model for one API snapshot.
 
@@ -22,23 +23,32 @@ Metric series produced
   greenops_carbon_scrape_errors_total
   greenops_carbon_scrape_duration_seconds
 
+Port allocation
+---------------
+  8000  Demo workload metrics  (app/)
+  8001  AI agent metrics       (agent/)
+  8002  Carbon metrics         (carbon/server.py)  ← this package
+
 Usage::
 
-    from carbon import CarbonMetricsExporter, CarbonMetrics
+    from carbon import CarbonMetricsServer
 
-    exporter = CarbonMetricsExporter(
+    server = CarbonMetricsServer(
         api_key="...",      # from ELECTRICITY_MAPS_API_KEY
         zone="DE",
+        port=8002,
     )
-    await exporter.update()  # call on each poll interval
+    await server.run()      # blocks; handles SIGTERM gracefully
 """
 
 from carbon.exporter import CarbonMetricsExporter
 from carbon.metrics import CarbonMetrics
 from carbon.models import ElectricityMapsData
+from carbon.server import CarbonMetricsServer
 
 __all__ = [
     "CarbonMetricsExporter",
+    "CarbonMetricsServer",
     "CarbonMetrics",
     "ElectricityMapsData",
 ]
