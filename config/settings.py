@@ -16,9 +16,10 @@ Usage::
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -179,6 +180,53 @@ class AgentSettings(BaseSettings):
     )
 
 
+class GitOpsSettings(BaseSettings):
+    """Settings for review-first GitHub GitOps change preparation."""
+
+    repo_path: Path = Field(
+        default=Path("."),
+        description="Local checkout containing Kubernetes desired-state files.",
+    )
+    base_branch: str = Field(
+        default="main",
+        description="Base branch for review-first GreenOps pull requests.",
+    )
+    branch_prefix: str = Field(
+        default="greenops",
+        description="Prefix for dedicated GreenOps optimization branches.",
+    )
+    manifest_path: Path = Field(
+        default=Path("k8s/overlays/prod/kustomization.yaml"),
+        description="Only this desired-state file may be modified by Phase 8.",
+    )
+    deployment_name: str = Field(
+        default="greenops-demo-workload",
+        description="Deployment whose replica patch may be updated.",
+    )
+    github_repository: str | None = Field(
+        default=None,
+        description="GitHub repository in owner/name format.",
+    )
+    github_api_url: str = Field(
+        default="https://api.github.com",
+        description="GitHub API base URL.",
+    )
+    github_token: SecretStr | None = Field(
+        default=None,
+        description="GitHub token sourced only from GREENOPS_GITOPS_GITHUB_TOKEN.",
+    )
+    create_pull_request: bool = Field(
+        default=False,
+        description="When true, call the GitHub API. Otherwise prepare PR metadata only.",
+    )
+
+    model_config = SettingsConfigDict(
+        env_prefix="GREENOPS_GITOPS_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+
 class ReportingSettings(BaseSettings):
     """Settings for the weekly GreenOps report."""
 
@@ -217,6 +265,7 @@ class Settings:
         self.kubernetes = KubernetesSettings()
         self.prometheus = PrometheusSettings()
         self.agent = AgentSettings()
+        self.gitops = GitOpsSettings()
         self.reporting = ReportingSettings()
 
 

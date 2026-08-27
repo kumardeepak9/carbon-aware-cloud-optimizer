@@ -97,6 +97,26 @@ configured through `AGENT_*` environment variables such as
 `AGENT_MAX_SCALE_DOWN_PERCENTAGE`, `AGENT_OPTIMIZATION_COOLDOWN_SECONDS`, and
 `AGENT_MAX_CARBON_DATA_AGE_SECONDS`.
 
+## Phase 8 GitOps workflow
+
+`gitops.GitOpsChangeWorkflow` consumes a `ValidatedRecommendation`. It prepares
+a dedicated Git branch, modifies only the configured Kubernetes desired-state
+manifest, creates a commit containing the AI decision and policy validation
+metadata, and either prepares or creates a GitHub pull request. It never calls
+the Kubernetes API.
+
+The default manifest target is
+`k8s/overlays/prod/kustomization.yaml`, where only the Kustomize
+`/spec/replicas` patch for `greenops-demo-workload` is changed. The workflow
+blocks dirty repositories to avoid mixing unrelated work, detects no-op replica
+changes, and returns a structured result when GitHub API calls fail.
+
+GitOps settings are loaded from `GREENOPS_GITOPS_*` environment variables,
+including `GREENOPS_GITOPS_REPO_PATH`, `GREENOPS_GITOPS_BASE_BRANCH`,
+`GREENOPS_GITOPS_MANIFEST_PATH`, `GREENOPS_GITOPS_GITHUB_REPOSITORY`,
+`GREENOPS_GITOPS_GITHUB_TOKEN`, and
+`GREENOPS_GITOPS_CREATE_PULL_REQUEST`.
+
 ---
 
 ## Usage
