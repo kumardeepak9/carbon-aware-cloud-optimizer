@@ -1,0 +1,82 @@
+{
+  "__comment": "Grafana dashboard — GreenOps Carbon Overview. Shows carbon intensity alongside replica count to visualize agent decisions.",
+  "title": "GreenOps — Carbon & Agent Overview",
+  "uid": "greenops-carbon-agent",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["greenops", "carbon", "agent"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Current Carbon Intensity (gCO2eq/kWh)",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 250 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "greenops_carbon_intensity_gco2_per_kwh",
+          "legendFormat": "gCO2eq/kWh"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Carbon Intensity vs Replica Count",
+      "targets": [
+        {
+          "expr": "greenops_carbon_intensity_gco2_per_kwh",
+          "legendFormat": "Carbon Intensity (gCO2eq/kWh)"
+        },
+        {
+          "expr": "kube_deployment_spec_replicas{namespace=\"greenops\",deployment=\"greenops-demo-workload\"} * 50",
+          "legendFormat": "Replicas × 50 (scaled)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Agent Observation Completeness",
+      "targets": [
+        {
+          "expr": "greenops_agent_observation_completeness_ratio",
+          "legendFormat": "completeness"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Agent Decisions",
+      "targets": [
+        {
+          "expr": "increase(greenops_agent_decisions_total[1h])",
+          "legendFormat": "{{ action }}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "GitOps Commits (24h)",
+      "targets": [
+        {
+          "expr": "increase(greenops_agent_gitops_commits_total{status=\"success\"}[24h])",
+          "legendFormat": "commits"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,135 @@
+# =============================================================================
+# Prometheus Recording Rules — GreenOps
+# =============================================================================
+# Recording rules pre-compute expensive or frequently-used PromQL expressions
+# into new time-series.  This reduces query latency in Grafana dashboards and
+# ensures the AI Agent always reads from low-cost series.
+#
+# Naming convention: <namespace>:<metric>:<aggregation>
+# Reference: https://prometheus.io/docs/practices/rules/
+# =============================================================================
+groups:
+
+  - name: greenops.workload.recording
+    interval: 30s
+    rules:
+
+      # ── CPU ──────────────────────────────────────────────────────────────
+      - record: greenops:workload:cpu_usage_cores
+        expr: |
+          sum(rate(container_cpu_usage_seconds_total{
+            namespace="greenops",
+            pod=~"greenops-demo-workload-.*",
+            container="greenops-demo-workload"
+          }[2m]))
+        labels:
+          deployment: greenops-demo-workload
+          namespace: greenops
+
+      - record: greenops:workload:cpu_request_ratio
+        expr: |
+          greenops:workload:cpu_usage_cores
+          /
+          sum(kube_pod_container_resource_requests{
+            namespace="greenops",
+            pod=~"greenops-demo-workload-.*",
+            resource="cpu"
+          })
+        labels:
+          deployment: greenops-demo-workload
+          namespace: greenops
+
+      # ── Memory ───────────────────────────────────────────────────────────
+      - record: greenops:workload:memory_usage_bytes
+        expr: |
+          sum(container_memory_working_set_bytes{
+            namespace="greenops",
+            pod=~"greenops-demo-workload-.*",
+            container="greenops-demo-workload"
+          })
+        labels:
+          deployment: greenops-demo-workload
+          namespace: greenops
+
+      - record: greenops:workload:memory_request_ratio
+        expr: |
+          greenops:workload:memory_usage_bytes
+          /
+          sum(kube_pod_container_resource_requests{
+            namespace="greenops",
+            pod=~"greenops-demo-workload-.*",
+            resource="memory"
+          })
+        labels:
+          deployment: greenops-demo-workload
+          namespace: greenops
+
+      # ── Availability ─────────────────────────────────────────────────────
+      - record: greenops:workload:availability_ratio
+        expr: |
+          kube_deployment_status_replicas_ready{
+            namespace="greenops",
+            deployment="greenops-demo-workload"
+          }
+          /
+          kube_deployment_spec_replicas{
+            namespace="greenops",
+            deployment="greenops-demo-workload"
+          }
+        labels:
+          deployment: greenops-demo-workload
+          namespace: greenops
+
+      # ── HTTP ─────────────────────────────────────────────────────────────
+      - record: greenops:workload:http_request_rate_rps
+        expr: |
+          sum(rate(greenops_demo_http_requests_total{
+            namespace="greenops"
+          }[2m]))
+        labels:
+          deployment: greenops-demo-workload
+          namespace: greenops
+
+      - record: greenops:workload:http_error_ratio
+        expr: |
+          sum(rate(greenops_demo_http_requests_total{
+            namespace="greenops",
+            status_code=~"5.."
+          }[2m]))
+          /
+          sum(rate(greenops_demo_http_requests_total{
+            namespace="greenops"
+          }[2m]))
+        labels:
+          deployment: greenops-demo-workload
+          namespace: greenops
+
+      - record: greenops:workload:http_p99_latency_seconds
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(greenops_demo_http_request_duration_seconds_bucket{
+              namespace="greenops"
+            }[2m])) by (le)
+          )
+        labels:
+          deployment: greenops-demo-workload
+          namespace: greenops
+
+  # ── Node ─────────────────────────────────────────────────────────────────
+  - name: greenops.node.recording
+    interval: 60s
+    rules:
+
+      - record: greenops:node:cpu_utilization_ratio
+        expr: |
+          1 - avg(rate(node_cpu_seconds_total{mode="idle"}[2m]))
+        labels:
+          cluster: greenops-local
+
+      - record: greenops:node:memory_available_ratio
+        expr: |
+          sum(node_memory_MemAvailable_bytes)
+          /
+          sum(node_memory_MemTotal_bytes)
+        labels:
+          cluster: greenops-local

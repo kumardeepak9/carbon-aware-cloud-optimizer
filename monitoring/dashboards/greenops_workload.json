@@ -1,0 +1,89 @@
+{
+  "__comment": "Grafana dashboard — GreenOps Workload Overview. Replace this stub with a full exported JSON from Grafana UI or generate via grafonnet.",
+  "title": "GreenOps — Workload Overview",
+  "uid": "greenops-workload-overview",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "tags": ["greenops", "workload", "kubernetes"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Ready Replicas",
+      "targets": [
+        {
+          "expr": "kube_deployment_status_replicas_ready{namespace=\"greenops\",deployment=\"greenops-demo-workload\"}",
+          "legendFormat": "Ready"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Desired Replicas",
+      "targets": [
+        {
+          "expr": "kube_deployment_spec_replicas{namespace=\"greenops\",deployment=\"greenops-demo-workload\"}",
+          "legendFormat": "Desired"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "CPU Usage (cores)",
+      "targets": [
+        {
+          "expr": "greenops:workload:cpu_usage_cores",
+          "legendFormat": "CPU cores"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Memory Usage (bytes)",
+      "targets": [
+        {
+          "expr": "greenops:workload:memory_usage_bytes",
+          "legendFormat": "Memory bytes"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "HTTP Request Rate (rps)",
+      "targets": [
+        {
+          "expr": "greenops:workload:http_request_rate_rps",
+          "legendFormat": "rps"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "HTTP P99 Latency",
+      "targets": [
+        {
+          "expr": "greenops:workload:http_p99_latency_seconds",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Availability Ratio",
+      "targets": [
+        {
+          "expr": "greenops:workload:availability_ratio",
+          "legendFormat": "availability"
+        }
+      ]
+    }
+  ]
+}

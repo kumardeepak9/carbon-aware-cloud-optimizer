@@ -1,0 +1,87 @@
+# =============================================================================
+# Prometheus — Scrape Configuration
+# =============================================================================
+# This file is mounted into the Prometheus container (see docker-compose.yml).
+# Targets:
+#   1. GreenOps demo workload (pull-based via pod annotations)
+#   2. GreenOps AI agent (pull-based)
+#   3. kube-state-metrics (Deployment/ReplicaSet/Pod state)
+#   4. node-exporter (Node CPU, memory, disk)
+#   5. Prometheus itself (self-scrape)
+# =============================================================================
+
+global:
+  scrape_interval:     15s     # Default scrape frequency
+  evaluation_interval: 15s     # Rule evaluation frequency
+  scrape_timeout:      10s
+
+  # Labels attached to every time-series (used to identify the cluster)
+  external_labels:
+    cluster: "greenops-local"
+    env: "development"
+
+# ---------------------------------------------------------------------------
+# Alerting
+# ---------------------------------------------------------------------------
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []   # Alertmanager not required for local dev
+
+# ---------------------------------------------------------------------------
+# Recording & alert rules
+# ---------------------------------------------------------------------------
+rule_files:
+  - "rules/greenops_recording.yml"
+  - "rules/greenops_alerts.yml"
+
+# ---------------------------------------------------------------------------
+# Scrape configurations
+# ---------------------------------------------------------------------------
+scrape_configs:
+
+  # ── 1. GreenOps demo workload ────────────────────────────────────────────
+  - job_name: "greenops-demo-workload"
+    static_configs:
+      - targets: ["agent:8000"]   # Docker Compose service name
+    metrics_path: /metrics
+    relabel_configs:
+      - target_label: namespace
+        replacement: greenops
+      - target_label: deployment
+        replacement: greenops-demo-workload
+
+  # ── 2. GreenOps AI agent ─────────────────────────────────────────────────
+  - job_name: "greenops-agent"
+    static_configs:
+      - targets: ["agent:8001"]   # Agent's own metrics port
+    metrics_path: /metrics
+    relabel_configs:
+      - target_label: component
+        replacement: agent
+
+  # ── 3. kube-state-metrics ────────────────────────────────────────────────
+  # Provides: kube_deployment_*, kube_pod_*, kube_node_*, etc.
+  # Install: kubectl apply -f https://github.com/kubernetes/kube-state-metrics/releases
+  - job_name: "kube-state-metrics"
+    static_configs:
+      - targets: ["kube-state-metrics:8080"]
+    honor_labels: true
+
+  # ── 4. node-exporter ─────────────────────────────────────────────────────
+  # Provides: node_cpu_*, node_memory_*, node_filesystem_*, etc.
+  # Install via Helm: helm install node-exporter prometheus-community/prometheus-node-exporter
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # ── 5. Prometheus self-scrape ─────────────────────────────────────────────
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ── 6. Pushgateway (for batch agent metrics) ──────────────────────────────
+  - job_name: "pushgateway"
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]

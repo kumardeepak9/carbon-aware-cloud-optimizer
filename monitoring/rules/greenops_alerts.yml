@@ -1,0 +1,139 @@
+# =============================================================================
+# Prometheus Alert Rules — GreenOps
+# =============================================================================
+# Alerts are fired to Alertmanager (and optionally Grafana On-Call).
+# Severity levels: critical > warning > info
+# =============================================================================
+groups:
+
+  - name: greenops.workload.alerts
+    rules:
+
+      # ── Availability ─────────────────────────────────────────────────────
+
+      - alert: WorkloadAvailabilityLow
+        expr: greenops:workload:availability_ratio < 0.5
+        for: 2m
+        labels:
+          severity: critical
+          team: greenops
+        annotations:
+          summary: "GreenOps workload availability below 50%"
+          description: |
+            Deployment {{ $labels.deployment }} in namespace {{ $labels.namespace }}
+            has fewer than 50% of its desired replicas ready for {{ $value | humanize }} minutes.
+            The GreenOps agent will not perform scale-down while this alert is firing.
+
+      - alert: WorkloadNoReadyPods
+        expr: kube_deployment_status_replicas_ready{namespace="greenops", deployment="greenops-demo-workload"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: greenops
+        annotations:
+          summary: "GreenOps workload has zero ready pods"
+          description: |
+            No ready pods for {{ $labels.deployment }}. Immediate investigation required.
+
+      # ── Error rate ───────────────────────────────────────────────────────
+
+      - alert: WorkloadHighErrorRate
+        expr: greenops:workload:http_error_ratio > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          team: greenops
+        annotations:
+          summary: "GreenOps workload HTTP error rate above 5%"
+          description: |
+            HTTP error rate is {{ $value | humanizePercentage }} (threshold: 5%).
+            Agent scale-down decisions are blocked.
+
+      # ── Latency ──────────────────────────────────────────────────────────
+
+      - alert: WorkloadHighP99Latency
+        expr: greenops:workload:http_p99_latency_seconds > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          team: greenops
+        annotations:
+          summary: "GreenOps workload P99 latency above 1 second"
+          description: |
+            P99 latency is {{ $value | humanizeDuration }}. Agent will not scale down.
+
+      # ── Pod restarts ─────────────────────────────────────────────────────
+
+      - alert: WorkloadPodCrashLooping
+        expr: |
+          rate(kube_pod_container_status_restarts_total{
+            namespace="greenops",
+            pod=~"greenops-demo-workload-.*"
+          }[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: greenops
+        annotations:
+          summary: "GreenOps workload pod is crash-looping"
+          description: |
+            Pod {{ $labels.pod }} has restarted {{ $value | humanize }} times in 15 minutes.
+
+  # ── Agent health ──────────────────────────────────────────────────────────
+
+  - name: greenops.agent.alerts
+    rules:
+
+      - alert: AgentPollErrors
+        expr: |
+          rate(greenops_agent_poll_total{status="error"}[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: greenops
+        annotations:
+          summary: "GreenOps agent poll cycle is failing"
+          description: |
+            Agent poll cycles are failing at a rate of {{ $value | humanize }}/s.
+
+      - alert: AgentObservationIncomplete
+        expr: greenops_agent_observation_completeness_ratio < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: greenops
+        annotations:
+          summary: "GreenOps agent is missing >20% of expected metrics"
+          description: |
+            Only {{ $value | humanizePercentage }} of expected metrics were collected.
+            Agent decisions may be based on incomplete data.
+
+  # ── Carbon intensity ──────────────────────────────────────────────────────
+
+  - name: greenops.carbon.alerts
+    rules:
+
+      - alert: HighCarbonIntensity
+        expr: greenops_carbon_intensity_gco2_per_kwh > 250
+        for: 5m
+        labels:
+          severity: info
+          team: greenops
+        annotations:
+          summary: "Grid carbon intensity is high — scale-down recommended"
+          description: |
+            Carbon intensity is {{ $value }} gCO2eq/kWh (threshold: 250).
+            The GreenOps agent should be scaling down workloads.
+
+      - alert: CarbonDataStale
+        expr: |
+          (time() - greenops_carbon_last_update_timestamp_seconds) > 600
+        for: 5m
+        labels:
+          severity: warning
+          team: greenops
+        annotations:
+          summary: "Carbon intensity data is stale (>10 minutes old)"
+          description: |
+            The carbon intensity signal has not been updated for more than 10 minutes.
+            Agent decisions are being made on stale data.
