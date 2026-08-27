@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: greenops-argocd-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    greenops.io/tier: platform
+  annotations:
+    greenops.io/description: >
+      App-of-Apps: manages the GreenOps Argo CD AppProject and workload
+      Applications as code. When this app syncs, it creates/updates
+      the AppProject and the greenops-workload-* Applications.
+      This is the entry-point for bootstrapping the entire GreenOps
+      GitOps platform configuration from a single kubectl apply.
+spec:
+  project: default  # platform app lives in default project (not greenops)
+
+  source:
+    repoURL: https://github.com/kumardeepak9/carbon-aware-cloud-optimizer.git
+    targetRevision: main
+    path: argocd            # watches the entire argocd/ directory in this repo
+    directory:
+      recurse: true         # includes argocd/applications/*.yaml and argocd/project.yaml
+      exclude: "*.template.yaml"  # exclude secret templates from sync
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false   # argocd namespace must already exist
+      - ServerSideApply=true    # required for CRDs managed by Argo CD itself

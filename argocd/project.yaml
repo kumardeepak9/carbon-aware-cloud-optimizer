@@ -1,0 +1,62 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: greenops
+  namespace: argocd
+  # Finalizer prevents deletion while Applications reference this project
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    greenops.io/managed-by: "greenops-ai"
+    greenops.io/description: >
+      GreenOps AI project — scopes all workload Applications to the greenops
+      namespace and restricts the source repository to the single authorised
+      GitOps repository. Only Argo CD may modify Kubernetes; the AI agent
+      modifies only Git.
+spec:
+  description: >
+    GreenOps AI — Carbon-aware cloud optimizer. Applications in this project
+    are synced from the designated GitOps repository. Only approved desired-state
+    changes committed by the GreenOps GitOps workflow appear here.
+
+  # ── Source repositories ─────────────────────────────────────────────────────
+  # Restrict to exactly one repository. All other repositories are denied.
+  sourceRepos:
+    - https://github.com/kumardeepak9/carbon-aware-cloud-optimizer.git
+
+  # ── Destination clusters and namespaces ─────────────────────────────────────
+  # Only allow deployment into the greenops namespace on the in-cluster server.
+  # Explicitly forbids deployment to kube-system, argocd, or any other namespace.
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: greenops
+
+  # ── Cluster resource access ──────────────────────────────────────────────────
+  # Allow only Namespace at the cluster level (so Argo CD can create/manage it).
+  # All other cluster-scoped resources (Nodes, ClusterRoles, etc.) are denied.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+
+  # ── Namespace resource access ────────────────────────────────────────────────
+  # Deny cluster-wide role bindings; workloads cannot escalate privileges.
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+    - group: ""
+      kind: LimitRange
+
+  # ── Orphan resource monitoring ───────────────────────────────────────────────
+  # Alert on resources that exist in the namespace but are not in Git.
+  orphanedResources:
+    warn: true
+
+  # ── Sync window ──────────────────────────────────────────────────────────────
+  # Allow syncs at all times — the GreenOps agent controls timing via Git commits.
+  # Uncomment to restrict to business hours only:
+  # syncWindows:
+  #   - kind: allow
+  #     schedule: "0 8 * * 1-5"
+  #     duration: 8h
+  #     applications:
+  #       - "*"

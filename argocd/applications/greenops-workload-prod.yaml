@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: greenops-workload-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    greenops.io/env: prod
+    greenops.io/tier: workload
+  annotations:
+    greenops.io/managed-by: "greenops-ai"
+    greenops.io/description: >
+      Production workload for the GreenOps AI demo.
+      Auto-sync is DISABLED. A human must approve the GreenOps pull request
+      and explicitly trigger a sync after merging. This prevents any automated
+      system from directly modifying production Kubernetes.
+spec:
+  project: greenops
+
+  source:
+    repoURL: https://github.com/kumardeepak9/carbon-aware-cloud-optimizer.git
+    targetRevision: main
+    path: k8s/overlays/prod
+    kustomize:
+      {}
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: greenops
+
+  # ── Production sync policy ───────────────────────────────────────────────
+  # Auto-sync is deliberately DISABLED for production.
+  # Deployment path:
+  #   AI Agent → Safety Policy → GitHub PR → human review → merge → manual Argo CD sync
+  #
+  # To sync after a merge:
+  #   argocd app sync greenops-workload-prod --prune
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

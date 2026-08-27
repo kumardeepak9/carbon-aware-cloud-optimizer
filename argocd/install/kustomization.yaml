@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# =============================================================================
+# Argo CD — GreenOps Platform Installation
+# =============================================================================
+# Installs Argo CD into the argocd namespace and applies the GreenOps
+# App-of-Apps bootstrap, which in turn creates the AppProject and
+# workload Applications.
+#
+# Bootstrap sequence:
+#   1. kubectl apply -k argocd/install/          ← this file
+#   2. Argo CD starts up in the argocd namespace
+#   3. argocd/app-of-apps.yaml is applied
+#   4. The app-of-apps syncs argocd/ directory → creates project.yaml + apps
+#   5. Each Application begins syncing k8s/overlays/<env>/ → workloads start
+#
+# Requirements:
+#   - kubectl connected to target cluster
+#   - argocd namespace does not need to exist (created by Argo CD install)
+#   - GitHub repository is accessible (configure repo-secret separately)
+#
+# Apply:
+#   kubectl apply -k argocd/install/
+#
+# Verify:
+#   kubectl -n argocd get pods
+#   kubectl -n argocd get applications
+# =============================================================================
+
+namespace: argocd
+
+resources:
+  # Argo CD core install (pinned version for reproducibility)
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.11.3/manifests/install.yaml
+  # GreenOps App-of-Apps bootstrap
+  - ../app-of-apps.yaml

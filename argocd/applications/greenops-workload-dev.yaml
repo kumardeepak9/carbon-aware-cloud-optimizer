@@ -1,0 +1,74 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: greenops-workload-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    greenops.io/env: dev
+    greenops.io/tier: workload
+  annotations:
+    greenops.io/managed-by: "greenops-ai"
+    greenops.io/description: >
+      Development environment workload for the GreenOps AI demo.
+      Replica count is managed by the GreenOps AI GitOps workflow.
+      The AI agent commits changes to k8s/overlays/dev/kustomization.yaml
+      which Argo CD then syncs to the cluster.
+spec:
+  # ── Project scope ─────────────────────────────────────────────────────────
+  project: greenops
+
+  # ── Source ────────────────────────────────────────────────────────────────
+  # Points to the Kustomize dev overlay. When the GreenOps agent commits a
+  # replica change to this path, Argo CD detects the diff and syncs.
+  source:
+    repoURL: https://github.com/kumardeepak9/carbon-aware-cloud-optimizer.git
+    targetRevision: main
+    path: k8s/overlays/dev
+    kustomize:
+      # No image tag overrides here — managed in the overlay kustomization.yaml
+      {}
+
+  # ── Destination ───────────────────────────────────────────────────────────
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: greenops
+
+  # ── Sync policy ───────────────────────────────────────────────────────────
+  # IMPORTANT: automated sync is DISABLED by default.
+  #
+  # The deployment path is:
+  #   AI Agent → Safety Policy → GitHub PR → human review → merge to main → Argo CD sync
+  #
+  # Uncomment syncPolicy.automated to enable auto-sync AFTER merging to main.
+  # Even with auto-sync, prune and selfHeal are explicit opt-ins.
+  #
+  # syncPolicy:
+  #   automated:
+  #     prune: true        # Remove resources that no longer exist in Git
+  #     selfHeal: true     # Revert manual kubectl changes back to Git state
+  #   syncOptions:
+  #     - CreateNamespace=true
+  #     - PrunePropagationPolicy=foreground
+  #     - PruneLast=true
+
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true       # Create the greenops namespace if absent
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true             # Delete old resources only after new ones are ready
+      - RespectIgnoreDifferences=true
+
+  # ── Health checks ─────────────────────────────────────────────────────────
+  # Argo CD built-in health checks apply for Deployment, Service, ConfigMap.
+  # No custom health checks are required for this workload.
+
+  # ── Ignore differences ────────────────────────────────────────────────────
+  # Prevent Argo CD from reverting fields managed by HPA or other controllers.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas    # Only revert replicas when a GreenOps commit changes them;
+                            # do not fight with any HPA that may co-exist.
