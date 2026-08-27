@@ -85,3 +85,22 @@ scrape_configs:
     honor_labels: true
     static_configs:
       - targets: ["pushgateway:9091"]
+
+  # ── 7. Carbon metrics exporter (Electricity Maps → Prometheus) ────────────
+  # Exposes: greenops_carbon_intensity_gco2_per_kwh, greenops_carbon_renewable_percentage,
+  #          greenops_carbon_fossil_fuel_percentage, greenops_carbon_low_carbon_percentage,
+  #          greenops_carbon_last_update_timestamp_seconds, greenops_carbon_data_available,
+  #          greenops_carbon_scrape_errors_total, greenops_carbon_scrape_duration_seconds
+  #
+  # scrape_interval is set to 60s (matching AGENT_POLL_INTERVAL_SECONDS default).
+  # Scraping more frequently than the Electricity Maps cache TTL (300s) wastes
+  # resources — values change at most every 5 minutes.
+  - job_name: "greenops-carbon-exporter"
+    static_configs:
+      - targets: ["agent:8002"]   # Carbon exporter pull endpoint (port 8002)
+    metrics_path: /metrics
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    relabel_configs:
+      - target_label: component
+        replacement: carbon-exporter

@@ -6,7 +6,7 @@ Prometheus integration layer for the GreenOps AI Agent.
 
 ```
 monitoring/
-├── __init__.py              # Public API: PrometheusClient, GreenOpsQueries, AgentMetrics
+├── __init__.py              # Public API: PrometheusClient, GreenOpsQueries, AgentMetrics, CarbonMetrics
 ├── client.py                # Async Prometheus HTTP API client
 ├── queries.py               # Centralised PromQL query registry (QuerySpec objects)
 ├── models.py                # Pydantic models for Prometheus API responses
@@ -18,6 +18,12 @@ monitoring/
 └── dashboards/
     ├── greenops_workload.json    # Grafana: Workload CPU, memory, replicas, latency
     └── greenops_carbon_agent.json  # Grafana: Carbon intensity vs replica decisions
+
+carbon/                      # Phase 4 — Electricity Maps → Prometheus exporter
+├── __init__.py              # Public API: CarbonMetricsExporter, CarbonMetrics, ElectricityMapsData
+├── models.py                # Pydantic models for Electricity Maps API responses
+├── metrics.py               # Carbon metric objects (greenops_carbon_* series)
+└── exporter.py              # CarbonMetricsExporter: fetches data, updates metrics
 ```
 
 ---
@@ -78,7 +84,7 @@ async with PrometheusClient(base_url="http://prometheus:9090") as client:
 ```bash
 make test-unit
 # or directly:
-pytest tests/unit/test_prometheus_client.py -v
+pytest tests/unit/test_prometheus_client.py tests/unit/test_carbon_metrics.py -v
 ```
 
 ## Prometheus Rules
@@ -87,3 +93,62 @@ Recording rules in `rules/greenops_recording.yml` pre-compute the expensive rati
 The AI agent queries the recording rule series (`greenops:workload:*`) for low-latency reads.
 
 Alert rules in `rules/greenops_alerts.yml` fire when the agent safety guards are violated.
+
+---
+
+## Carbon Metrics (Phase 4)
+
+The `carbon/` package implements the Electricity Maps → Prometheus export pipeline.
+Metrics are scraped by Prometheus from port **8002** (job `greenops-carbon-exporter`).
+
+### Exported series
+
+| Metric | Type | Labels | Description |
+|---|---|---|---|
+| `greenops_carbon_intensity_gco2_per_kwh` | Gauge | `zone` | Grid carbon intensity (gCO2eq/kWh) |
+| `greenops_carbon_renewable_percentage` | Gauge | `zone` | % generation from renewables (0–100) |
+| `greenops_carbon_fossil_fuel_percentage` | Gauge | `zone` | % generation from fossil fuels (0–100) |
+| `greenops_carbon_low_carbon_percentage` | Gauge | `zone` | % low-carbon (renewable + nuclear, 0–100) |
+| `greenops_carbon_last_update_timestamp_seconds` | Gauge | `zone` | Unix epoch of the Electricity Maps data point |
+| `greenops_carbon_data_available` | Gauge | `zone` | 1 = fresh data, 0 = fetch failed |
+| `greenops_carbon_scrape_errors_total` | Counter | `zone`, `error_type` | Cumulative fetch/parse failures |
+| `greenops_carbon_scrape_duration_seconds` | Histogram | `zone` | API fetch latency |
+
+`error_type` values: `connection`, `http`, `parse`, `timeout`.
+
+### Label cardinality
+
+Only `zone` is used as a label.  Zone values come from the operator-controlled
+`ELECTRICITY_MAPS_ZONE` environment variable — the set of values is bounded and
+known at deploy time.  No user-supplied or unbounded values are ever used.
+
+### Safe unavailability
+
+When the Electricity Maps API is unreachable or returns an error:
+- `greenops_carbon_data_available` is set to `0`
+- `greenops_carbon_scrape_errors_total` is incremented
+- All other Gauges **retain their last-set value** (Prometheus carries them forward)
+- `update()` never raises — the scheduler / agent loop is not interrupted
+
+When `/power-breakdown/latest` returns 4xx (e.g. restricted API tier):
+- Carbon intensity, timestamp, and `data_available` are still exported normally
+- Renewable/fossil/low-carbon Gauges retain their prior values
+- The error counter is **not** incremented (partial data is expected, not an error)
+
+### Usage
+
+```python
+from carbon import CarbonMetricsExporter
+
+exporter = CarbonMetricsExporter(
+    api_key=settings.electricity_maps.api_key,  # from ELECTRICITY_MAPS_API_KEY
+    zone=settings.electricity_maps.zone,        # from ELECTRICITY_MAPS_ZONE
+)
+await exporter.open()
+# On each poll interval:
+data = await exporter.update()
+if data:
+    print(f"Carbon intensity: {data.carbon_intensity_gco2_per_kwh} gCO2eq/kWh")
+await exporter.close()
+```
+
