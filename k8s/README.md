@@ -34,9 +34,10 @@ kubectl apply -k k8s/overlays/prod
 
 ## GreenOps AI — Replica Control
 
-The GreenOps AI agent scales the `greenops-demo-workload` Deployment by **committing a change to `/spec/replicas`** in `k8s/overlays/prod/kustomization.yaml` and pushing via GitOps.
-
-Argo CD detects the commit and reconciles the cluster state.
+Phase 6's GreenOps AI agent is **read-only**. It consumes Prometheus and grid
+signals and returns a recommendation only; it does not commit to Git, change
+Kubernetes resources, or interact with Argo CD. Applying a recommendation is
+reserved for a future explicitly approved control phase.
 
 | Carbon Intensity | Agent Action | Replica Target |
 |---|---|---|

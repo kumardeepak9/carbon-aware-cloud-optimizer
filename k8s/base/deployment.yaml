@@ -3,7 +3,7 @@
 # =============================================================================
 # The replica count is intentionally set to a minimal base value here.
 # Overlays (dev / prod) patch it to the environment-appropriate value.
-# The GreenOps AI agent will later mutate replicas via GitOps commits.
+# Phase 6's GreenOps agent is read-only and only recommends replica changes.
 # =============================================================================
 apiVersion: apps/v1
 kind: Deployment
@@ -22,7 +22,7 @@ metadata:
 spec:
   # ── Replica count ──────────────────────────────────────────────────────────
   # Patched by kustomize overlays (dev: 1, prod: 3).
-  # GreenOps AI will later update this via GitOps commits.
+  # A future approved control phase may update this value; Phase 6 does not.
   replicas: 2
 
   selector:

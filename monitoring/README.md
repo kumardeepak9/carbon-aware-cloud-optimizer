@@ -50,6 +50,11 @@ They form the **complete observation state** the AI agent uses to make scaling d
 | `node_cpu_utilization_ratio` | `1 - avg(rate(node_cpu_seconds_total{mode="idle"}[2m]))` | ratio | node-exporter | Headroom check |
 | `node_memory_available_bytes` | `sum(node_memory_MemAvailable_bytes)` | bytes | node-exporter | Headroom check |
 | `carbon_intensity_gco2_kwh` | `greenops_carbon_intensity_gco2_per_kwh` | gCO2eq/kWh | carbon/ layer | **Primary decision driver** |
+| `renewable_percentage` | `greenops_carbon_renewable_percentage` | percent | carbon/ layer | Grid generation context |
+| `fossil_fuel_percentage` | `greenops_carbon_fossil_fuel_percentage` | percent | carbon/ layer | Grid generation context |
+| `low_carbon_percentage` | `greenops_carbon_low_carbon_percentage` | percent | carbon/ layer | Grid generation context |
+| `carbon_data_available` | `greenops_carbon_data_available` | boolean | carbon/ layer | Data safety guard |
+| `carbon_last_update_timestamp_seconds` | `greenops_carbon_last_update_timestamp_seconds` | seconds | carbon/ layer | Stale-data safety guard |
 
 ### Scale-down Safety Guards
 
@@ -61,6 +66,14 @@ The agent will **not** reduce replicas if any of these conditions are true:
 | Elevated error rate | `http_error_rate_rps` | `> 0` (non-zero) |
 | High P99 latency | `http_p99_latency_seconds` | `> 1.0s` |
 | Pod instability | `pod_restart_rate` | `> 0` |
+
+## Phase 6 read-only recommendations
+
+`agent.DecisionPolicy` is deterministic and is the only component permitted to
+choose an action or replica target. Any future LLM integration is restricted to
+explaining a completed recommendation through `RecommendationExplainer`; it
+cannot modify the decision. The agent has no GitHub, Kubernetes, Argo CD, or
+infrastructure write client.
 
 ---
 
@@ -151,4 +164,3 @@ if data:
     print(f"Carbon intensity: {data.carbon_intensity_gco2_per_kwh} gCO2eq/kWh")
 await exporter.close()
 ```
-

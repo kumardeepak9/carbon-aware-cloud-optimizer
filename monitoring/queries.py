@@ -73,6 +73,16 @@ class GreenOpsQueries:
         self._ns = namespace
         self._dep = deployment
 
+    @property
+    def namespace(self) -> str:
+        """Namespace targeted by this query registry."""
+        return self._ns
+
+    @property
+    def deployment(self) -> str:
+        """Deployment targeted by this query registry."""
+        return self._dep
+
     # ------------------------------------------------------------------
     # CPU
     # ------------------------------------------------------------------
@@ -328,6 +338,51 @@ class GreenOpsQueries:
             ),
         )
 
+    def renewable_percentage(self) -> QuerySpec:
+        """Renewable share of electricity generation for the selected grid zone."""
+        return QuerySpec(
+            name="renewable_percentage",
+            expr="greenops_carbon_renewable_percentage",
+            unit="percent",
+            description="Renewable generation share reported by Electricity Maps.",
+        )
+
+    def fossil_fuel_percentage(self) -> QuerySpec:
+        """Fossil-fuel share of electricity generation for the selected grid zone."""
+        return QuerySpec(
+            name="fossil_fuel_percentage",
+            expr="greenops_carbon_fossil_fuel_percentage",
+            unit="percent",
+            description="Fossil-fuel generation share reported by Electricity Maps.",
+        )
+
+    def low_carbon_percentage(self) -> QuerySpec:
+        """Low-carbon (renewable plus nuclear) grid generation share."""
+        return QuerySpec(
+            name="low_carbon_percentage",
+            expr="greenops_carbon_low_carbon_percentage",
+            unit="percent",
+            description="Low-carbon generation share reported by Electricity Maps.",
+        )
+
+    def carbon_data_available(self) -> QuerySpec:
+        """Whether the carbon exporter most recently obtained valid grid data."""
+        return QuerySpec(
+            name="carbon_data_available",
+            expr="greenops_carbon_data_available",
+            unit="boolean",
+            description="One when the latest carbon exporter collection succeeded.",
+        )
+
+    def carbon_last_update_timestamp(self) -> QuerySpec:
+        """Timestamp of the grid data point, used to reject stale carbon signals."""
+        return QuerySpec(
+            name="carbon_last_update_timestamp_seconds",
+            expr="greenops_carbon_last_update_timestamp_seconds",
+            unit="seconds",
+            description="Unix timestamp of the latest Electricity Maps grid data point.",
+        )
+
     # ------------------------------------------------------------------
     # Agent health
     # ------------------------------------------------------------------
@@ -373,6 +428,11 @@ class GreenOpsQueries:
                 self.node_cpu_utilization(),
                 self.node_memory_available_bytes(),
                 self.carbon_intensity_gco2_kwh(),
+                self.renewable_percentage(),
+                self.fossil_fuel_percentage(),
+                self.low_carbon_percentage(),
+                self.carbon_data_available(),
+                self.carbon_last_update_timestamp(),
             ]
             if qs.agent_input
         ]

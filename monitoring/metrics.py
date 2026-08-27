@@ -43,7 +43,7 @@ AGENT_DECISIONS_TOTAL = Counter(
 
 AGENT_REPLICA_TARGET = Gauge(
     name="greenops_agent_replica_target",
-    documentation="The replica count the agent last committed to GitOps.",
+    documentation="The replica count in the agent's latest read-only recommendation.",
     labelnames=["namespace", "deployment"],
 )
 
@@ -95,7 +95,7 @@ AGENT_OBSERVATION_COMPLETENESS = Gauge(
 # ---------------------------------------------------------------------------
 AGENT_GITOPS_COMMITS_TOTAL = Counter(
     name="greenops_agent_gitops_commits_total",
-    documentation="Total GitOps commits made by the agent.",
+    documentation="Reserved for a future approved control phase; Phase 6 never updates it.",
     labelnames=["status"],  # success | error
 )
 

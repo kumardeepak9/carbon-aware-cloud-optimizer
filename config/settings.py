@@ -92,6 +92,10 @@ class KubernetesSettings(BaseSettings):
 class PrometheusSettings(BaseSettings):
     """Settings for Prometheus metrics exposition."""
 
+    api_url: str = Field(
+        default="http://localhost:9090",
+        description="Prometheus HTTP API used by the read-only decision agent.",
+    )
     pushgateway_url: str = Field(
         default="http://localhost:9091",
     )
