@@ -1,0 +1,62 @@
+# =============================================================================
+# Kustomization — dev overlay
+# =============================================================================
+# Dev is lightweight: 1 replica, relaxed resource limits, debug log level.
+# Apply with:
+#   kubectl apply -k k8s/overlays/dev
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: greenops
+
+bases:
+  - ../../base
+
+# ── Image overrides ───────────────────────────────────────────────────────────
+# In dev, use the locally-built image pulled from a local registry.
+images:
+  - name: greenops-demo-workload
+    newTag: dev
+
+# ── Common labels for this environment ───────────────────────────────────────
+commonLabels:
+  greenops.io/env: dev
+
+# ── Patches ──────────────────────────────────────────────────────────────────
+patches:
+  # 1. Replica count — GreenOps AI will modify this value via GitOps commits.
+  - target:
+      kind: Deployment
+      name: greenops-demo-workload
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+  # 2. Resource limits — relaxed in dev to save cluster capacity.
+  - target:
+      kind: Deployment
+      name: greenops-demo-workload
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "250m"
+            memory: "128Mi"
+
+  # 3. Config overrides — debug logging in dev.
+  - target:
+      kind: ConfigMap
+      name: greenops-demo-workload-config
+    patch: |-
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: "DEBUG"
+      - op: replace
+        path: /data/LOG_FORMAT
+        value: "pretty"

@@ -1,0 +1,29 @@
+# =============================================================================
+# Service — greenops-demo-workload
+# =============================================================================
+# ClusterIP service routes traffic to pods on port 8080.
+# Expose externally via Ingress or port-forward for local development.
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: greenops-demo-workload
+  namespace: greenops
+  labels:
+    app.kubernetes.io/name: greenops-demo-workload
+    app.kubernetes.io/component: workload
+    app.kubernetes.io/part-of: greenops
+  annotations:
+    # Prometheus ServiceMonitor (if Prometheus Operator is installed)
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8080"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: greenops-demo-workload
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http        # references the named port in the Deployment

@@ -1,0 +1,21 @@
+# =============================================================================
+# Kustomization — base
+# =============================================================================
+# Declares all base resources. Overlays reference this base and patch only
+# what differs per environment (replica count, image tag, resource limits).
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: greenops
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+
+# Common labels applied to every resource in this base
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: greenops

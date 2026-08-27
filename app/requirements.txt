@@ -1,0 +1,9 @@
+# GreenOps Demo Workload — Application Dependencies
+# Pinned to minor versions for reproducibility.
+# Update with: pip-compile app/requirements.in
+
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+prometheus-client==0.20.0
+structlog==24.1.0
+anyio==4.4.0

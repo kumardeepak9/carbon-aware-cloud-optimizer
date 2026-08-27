@@ -1,0 +1,28 @@
+# =============================================================================
+# ConfigMap — greenops-demo-workload
+# =============================================================================
+# Non-secret runtime configuration for the demo workload.
+# Secrets (API keys, passwords) are NEVER stored here — use Kubernetes Secrets
+# or an external secrets manager (e.g. External Secrets Operator).
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: greenops-demo-workload-config
+  namespace: greenops
+  labels:
+    app.kubernetes.io/name: greenops-demo-workload
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: greenops
+data:
+  # Application identity
+  APP_NAME: "greenops-demo-workload"
+  APP_VERSION: "0.1.0"
+
+  # Logging
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+
+  # Server tuning
+  UVICORN_WORKERS: "2"
+  UVICORN_PORT: "8080"

@@ -1,0 +1,167 @@
+# =============================================================================
+# Deployment — greenops-demo-workload
+# =============================================================================
+# The replica count is intentionally set to a minimal base value here.
+# Overlays (dev / prod) patch it to the environment-appropriate value.
+# The GreenOps AI agent will later mutate replicas via GitOps commits.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: greenops-demo-workload
+  namespace: greenops
+  labels:
+    app.kubernetes.io/name: greenops-demo-workload
+    app.kubernetes.io/component: workload
+    app.kubernetes.io/part-of: greenops
+    app.kubernetes.io/version: "0.1.0"
+  annotations:
+    # Signals to the GreenOps agent that this Deployment is managed
+    greenops.io/managed: "true"
+    greenops.io/carbon-aware: "true"
+spec:
+  # ── Replica count ──────────────────────────────────────────────────────────
+  # Patched by kustomize overlays (dev: 1, prod: 3).
+  # GreenOps AI will later update this via GitOps commits.
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: greenops-demo-workload
+
+  # ── Update strategy ────────────────────────────────────────────────────────
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0        # Zero-downtime rollout
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: greenops-demo-workload
+        app.kubernetes.io/version: "0.1.0"
+      annotations:
+        # Prometheus scrape annotations (fallback if no ServiceMonitor CRD)
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8080"
+
+    spec:
+      # ── Security context (pod level) ────────────────────────────────────────
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+
+      # ── Graceful termination ────────────────────────────────────────────────
+      terminationGracePeriodSeconds: 30
+
+      # ── Topology spread (soft) ──────────────────────────────────────────────
+      # Prefer spreading pods across nodes to avoid single-point failures.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: greenops-demo-workload
+
+      containers:
+        - name: workload
+          # Image is overridden per overlay; the tag is updated by CI.
+          image: greenops-demo-workload:0.1.0
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          # ── Environment — from ConfigMap ────────────────────────────────────
+          envFrom:
+            - configMapRef:
+                name: greenops-demo-workload-config
+
+          # ── Downward API — expose pod identity to the app ──────────────────
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+
+          # ── Resource requests & limits ─────────────────────────────────────
+          # Requests: guaranteed allocation.
+          # Limits: capped allocation — prevents noisy-neighbour issues.
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+          # ── Liveness probe — did the process die? ──────────────────────────
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+
+          # ── Readiness probe — is the pod ready to serve? ───────────────────
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+
+          # ── Startup probe — give the app time to boot ──────────────────────
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12   # up to 60 s before liveness takes over
+
+          # ── Security context (container level) ────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+            capabilities:
+              drop:
+                - ALL
+
+          # ── Volume mounts for read-only filesystem ─────────────────────────
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: uvicorn-tmp
+              mountPath: /tmp/uvicorn
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: uvicorn-tmp
+          emptyDir: {}

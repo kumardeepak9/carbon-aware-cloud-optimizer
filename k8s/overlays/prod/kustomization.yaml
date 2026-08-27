@@ -1,0 +1,70 @@
+# =============================================================================
+# Kustomization — prod overlay
+# =============================================================================
+# Production: 3 replicas by default, full resource allocation, JSON logging.
+# The GreenOps AI agent scales this between 1–6 replicas based on carbon
+# intensity, committing changes to this file via GitOps.
+# Apply with:
+#   kubectl apply -k k8s/overlays/prod
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: greenops
+
+bases:
+  - ../../base
+
+# ── Image overrides ───────────────────────────────────────────────────────────
+# Tag is updated by CI on every successful build.
+images:
+  - name: greenops-demo-workload
+    newName: ghcr.io/your-org/greenops-demo-workload
+    newTag: 0.1.0
+
+# ── Common labels for this environment ───────────────────────────────────────
+commonLabels:
+  greenops.io/env: prod
+
+# ── Patches ──────────────────────────────────────────────────────────────────
+patches:
+  # 1. Replica count
+  # ⚡ GreenOps AI agent modifies this value automatically via GitOps commits.
+  #    Range: 1 (high carbon / low demand) → 6 (low carbon / high demand)
+  - target:
+      kind: Deployment
+      name: greenops-demo-workload
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  # 2. Production resource envelope
+  - target:
+      kind: Deployment
+      name: greenops-demo-workload
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+
+  # 3. Production config
+  - target:
+      kind: ConfigMap
+      name: greenops-demo-workload-config
+    patch: |-
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: "INFO"
+      - op: replace
+        path: /data/LOG_FORMAT
+        value: "json"
+      - op: replace
+        path: /data/UVICORN_WORKERS
+        value: "4"

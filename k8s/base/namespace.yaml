@@ -1,0 +1,14 @@
+# =============================================================================
+# Namespace — greenops
+# =============================================================================
+# Isolates all GreenOps workloads from other cluster tenants.
+# Labels enable future NetworkPolicy and LimitRange targeting.
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: greenops
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/part-of: greenops
+    greenops.io/env: base
