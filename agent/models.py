@@ -14,6 +14,12 @@ class Action(StrEnum):
     DEFER = "DEFER"
 
 
+class ValidationStatus(StrEnum):
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    REQUIRE_REVIEW = "REQUIRE_REVIEW"
+
+
 class EnvironmentalContext(BaseModel):
     """Grid information used to assess the carbon opportunity."""
 
@@ -63,3 +69,21 @@ class DecisionRecommendation(BaseModel):
     environmental_context: EnvironmentalContext
     operational_context: OperationalContext
     metadata: DecisionMetadata
+
+
+class PolicyValidation(BaseModel):
+    """Deterministic safety verdict required before any GitOps action exists."""
+
+    status: ValidationStatus
+    reason: str
+    policy_version: str = "phase-7-v1"
+    approved_for_gitops_change: bool = False
+    safeguards_triggered: list[str] = Field(default_factory=list)
+    evaluated_at_seconds: float
+
+
+class ValidatedRecommendation(BaseModel):
+    """AI recommendation plus mandatory Phase 7 policy validation."""
+
+    recommendation: DecisionRecommendation
+    validation: PolicyValidation

@@ -128,6 +128,43 @@ class AgentSettings(BaseSettings):
         default=100.0,
         description="gCO2eq/kWh below which the agent permits full-scale workloads.",
     )
+    min_replicas: int = Field(
+        default=1,
+        ge=0,
+        description="Minimum replica count any optimization may target.",
+    )
+    max_replicas: int = Field(
+        default=10,
+        ge=1,
+        description="Maximum replica count any optimization may target.",
+    )
+    cpu_safety_threshold: float = Field(
+        default=0.70,
+        ge=0.0,
+        le=1.0,
+        description="CPU request ratio above which scale-down is unsafe.",
+    )
+    latency_sla_threshold_seconds: float = Field(
+        default=1.0,
+        gt=0.0,
+        description="P99 latency threshold used by recommendation and validation policies.",
+    )
+    max_scale_down_percentage: float = Field(
+        default=0.50,
+        gt=0.0,
+        le=1.0,
+        description="Maximum per-action replica reduction without review.",
+    )
+    optimization_cooldown_seconds: int = Field(
+        default=900,
+        ge=0,
+        description="Minimum time between optimization actions.",
+    )
+    max_carbon_data_age_seconds: int = Field(
+        default=600,
+        ge=0,
+        description="Maximum acceptable carbon data age for optimization decisions.",
+    )
 
     @field_validator("carbon_intensity_threshold_low")
     @classmethod

@@ -1,22 +1,31 @@
-"""Read-only orchestration of Prometheus collection and deterministic policy."""
+"""Read-only orchestration of recommendation and mandatory safety validation."""
 
 from __future__ import annotations
 
-from agent.models import DecisionRecommendation
+from agent.models import ValidatedRecommendation
 from agent.policy import DecisionPolicy
+from agent.safety import OptimizationSafetyPolicy
 from monitoring.client import PrometheusClient
 from monitoring.queries import GreenOpsQueries
 
 
 class GreenOpsDecisionAgent:
-    """Collects observations and returns recommendations; it never applies them."""
+    """Collects observations and returns only policy-validated recommendations."""
 
-    def __init__(self, client: PrometheusClient, policy: DecisionPolicy | None = None) -> None:
+    def __init__(
+        self,
+        client: PrometheusClient,
+        policy: DecisionPolicy | None = None,
+        safety_policy: OptimizationSafetyPolicy | None = None,
+    ) -> None:
         self._client = client
         self._policy = policy or DecisionPolicy()
+        self._safety_policy = safety_policy or OptimizationSafetyPolicy()
 
-    async def recommend(self, queries: GreenOpsQueries) -> DecisionRecommendation:
+    async def recommend(self, queries: GreenOpsQueries) -> ValidatedRecommendation:
         observation = await self._client.collect_agent_observation(
             queries, namespace=queries.namespace, deployment=queries.deployment
         )
-        return self._policy.recommend(observation)
+        recommendation = self._policy.recommend(observation)
+        validation = self._safety_policy.validate(recommendation)
+        return ValidatedRecommendation(recommendation=recommendation, validation=validation)

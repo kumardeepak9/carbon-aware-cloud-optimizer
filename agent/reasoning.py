@@ -1,8 +1,9 @@
 """Optional explanation boundary for future LLM use.
 
-The deterministic policy remains the sole authority for action and replica
-targets.  An implementation of this protocol may only enrich the explanation
-of an already-created recommendation.
+The deterministic recommendation policy remains the sole authority for action
+and replica targets. The deterministic safety policy remains the sole authority
+for GitOps approval. An implementation of this protocol may only enrich the
+explanation of an already-created recommendation.
 """
 
 from __future__ import annotations

@@ -75,6 +75,28 @@ explaining a completed recommendation through `RecommendationExplainer`; it
 cannot modify the decision. The agent has no GitHub, Kubernetes, Argo CD, or
 infrastructure write client.
 
+## Phase 7 policy validation
+
+`agent.OptimizationSafetyPolicy` validates every agent recommendation before it
+can be considered for a future GitOps change. `GreenOpsDecisionAgent.recommend()`
+returns a `ValidatedRecommendation` envelope containing both the recommendation
+and one validation result:
+
+| Result | Meaning |
+|---|---|
+| `APPROVED` | The recommendation satisfies all configured safety safeguards. |
+| `REJECTED` | The recommendation must not become an infrastructure change. |
+| `REQUIRE_REVIEW` | The recommendation is not automatically approved and needs human review. |
+
+The validation layer checks minimum and maximum replicas, CPU and latency/SLA
+thresholds, application health, maximum scale-down percentage, optimization
+cooldown, missing metrics, and carbon-data freshness. These safeguards are
+configured through `AGENT_*` environment variables such as
+`AGENT_MIN_REPLICAS`, `AGENT_MAX_REPLICAS`,
+`AGENT_CPU_SAFETY_THRESHOLD`, `AGENT_LATENCY_SLA_THRESHOLD_SECONDS`,
+`AGENT_MAX_SCALE_DOWN_PERCENTAGE`, `AGENT_OPTIMIZATION_COOLDOWN_SECONDS`, and
+`AGENT_MAX_CARBON_DATA_AGE_SECONDS`.
+
 ---
 
 ## Usage
