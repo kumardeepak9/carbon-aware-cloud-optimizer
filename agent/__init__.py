@@ -1,5 +1,6 @@
 """Read-only, reliability-first GreenOps recommendation agent."""
 
+from agent.health import EndToEndHealthReport, GreenOpsHealthChecker, HealthStatus
 from agent.models import (
     Action,
     DecisionRecommendation,
@@ -16,7 +17,10 @@ __all__ = [
     "Action",
     "DecisionPolicy",
     "DecisionRecommendation",
+    "EndToEndHealthReport",
     "EnvironmentalContext",
+    "GreenOpsHealthChecker",
+    "HealthStatus",
     "OptimizationSafetyConfig",
     "OptimizationSafetyPolicy",
     "OperationalContext",

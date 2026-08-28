@@ -19,7 +19,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -173,6 +173,12 @@ class AgentSettings(BaseSettings):
         # Validated after high is known
         return v
 
+    @model_validator(mode="after")
+    def replica_bounds_are_consistent(self) -> "AgentSettings":
+        if self.min_replicas > self.max_replicas:
+            raise ValueError("AGENT_MIN_REPLICAS must be less than or equal to AGENT_MAX_REPLICAS")
+        return self
+
     model_config = SettingsConfigDict(
         env_prefix="AGENT_",
         env_file=".env",
@@ -219,6 +225,22 @@ class GitOpsSettings(BaseSettings):
         default=False,
         description="When true, call the GitHub API. Otherwise prepare PR metadata only.",
     )
+
+    @model_validator(mode="after")
+    def gitops_settings_are_safe(self) -> "GitOpsSettings":
+        if self.manifest_path.is_absolute():
+            raise ValueError("GREENOPS_GITOPS_MANIFEST_PATH must be relative to repo_path")
+        if ".." in self.manifest_path.parts:
+            raise ValueError("GREENOPS_GITOPS_MANIFEST_PATH must not traverse parent directories")
+        if not self.manifest_path.as_posix().startswith("k8s/"):
+            raise ValueError("GREENOPS_GITOPS_MANIFEST_PATH must point under k8s/")
+        if self.create_pull_request and not self.github_repository:
+            raise ValueError(
+                "GREENOPS_GITOPS_GITHUB_REPOSITORY is required when PR creation is enabled"
+            )
+        if self.create_pull_request and self.github_token is None:
+            raise ValueError("GREENOPS_GITOPS_GITHUB_TOKEN is required when PR creation is enabled")
+        return self
 
     model_config = SettingsConfigDict(
         env_prefix="GREENOPS_GITOPS_",

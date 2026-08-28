@@ -22,10 +22,18 @@ class GreenOpsDecisionAgent:
         self._policy = policy or DecisionPolicy()
         self._safety_policy = safety_policy or OptimizationSafetyPolicy()
 
-    async def recommend(self, queries: GreenOpsQueries) -> ValidatedRecommendation:
+    async def recommend(
+        self,
+        queries: GreenOpsQueries,
+        *,
+        last_optimization_timestamp_seconds: float | None = None,
+    ) -> ValidatedRecommendation:
         observation = await self._client.collect_agent_observation(
             queries, namespace=queries.namespace, deployment=queries.deployment
         )
         recommendation = self._policy.recommend(observation)
-        validation = self._safety_policy.validate(recommendation)
+        validation = self._safety_policy.validate(
+            recommendation,
+            last_optimization_timestamp_seconds=last_optimization_timestamp_seconds,
+        )
         return ValidatedRecommendation(recommendation=recommendation, validation=validation)

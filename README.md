@@ -13,7 +13,7 @@
 The Carbon-Aware Cloud Optimizer continuously monitors the **carbon intensity of the electricity grid** (via [Electricity Maps](https://electricitymaps.com)) and uses an **AI agent** to make real-time scheduling decisions — deferring, scaling, or shifting Kubernetes workloads to minimise carbon emissions without sacrificing reliability.
 
 ```
-Electricity Maps ──► AI Agent ──► GitHub GitOps ──► Argo CD ──► K8s Cluster
+Electricity Maps ──► AI Agent ──► Policy Validation ──► GitHub GitOps ──► Argo CD ──► K8s Cluster
                          │
                          └──► Prometheus ──► Grafana
                                    │
@@ -27,11 +27,11 @@ Electricity Maps ──► AI Agent ──► GitHub GitOps ──► Argo CD �
 | Component | Responsibility |
 |---|---|
 | `carbon/` | Ingest live grid & carbon-intensity data from Electricity Maps |
-| `agent/` | AI decision loop — scale / shift / defer workloads |
+| `agent/` | AI decision loop plus deterministic safety validation |
 | `monitoring/` | Prometheus metrics + Grafana dashboards |
 | `reporting/` | Weekly GreenOps PDF/HTML report generation |
 | `k8s/` | Kubernetes manifests (Kustomize base + overlays) |
-| `gitops/` | GitOps configuration, Argo CD Application & Project CRs |
+| `gitops/` | Review-first GitHub GitOps branch, commit, and PR preparation |
 | `config/` | Environment-variable-driven settings + structured logging |
 | `tests/` | Unit and integration test suite |
 | `docs/` | Architecture, runbooks, ADRs |
@@ -65,6 +65,12 @@ make docker-up
 
 # 5. Run agent locally (without Docker)
 make agent
+
+# Validate integration readiness
+make health
+
+# Prepare a review-first GitOps change from an approved decision
+make gitops
 ```
 
 ### Running Tests
@@ -112,6 +118,14 @@ Copy `.env.example` → `.env` and populate before running.
 ## Contributing
 
 See [docs/onboarding.md](docs/onboarding.md) for the development workflow.
+
+## Production Integration
+
+The end-to-end GreenOps AI workflow is documented in
+[docs/e2e-production-integration.md](docs/e2e-production-integration.md).
+It covers the Electricity Maps → Prometheus → AI Agent → Safety Policy →
+GitHub GitOps → Argo CD → Kubernetes → Prometheus verification loop and the
+weekly reporting path.
 
 ---
 

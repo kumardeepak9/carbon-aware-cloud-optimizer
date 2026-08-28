@@ -13,7 +13,7 @@ RESET  := \033[0m
 
 .PHONY: help install install-dev lint format type-check test test-unit \
         test-integration coverage clean docker-up docker-down \
-        docker-build agent gitops report
+        docker-build agent health gitops report
 
 help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -74,6 +74,9 @@ docker-build:  ## Build all Docker images
 # ---------------------------------------------------------------------------
 agent:  ## Run the GreenOps AI agent locally
 	$(PYTHON) -m agent.agent
+
+health:  ## Run read-only GreenOps integration health checks
+	$(PYTHON) -m agent.health_cli
 
 gitops:  ## Prepare a review-first GreenOps GitOps change
 	$(PYTHON) -m gitops.cli

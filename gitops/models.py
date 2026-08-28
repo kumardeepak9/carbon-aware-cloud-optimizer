@@ -15,6 +15,7 @@ class GitOpsChangeStatus(StrEnum):
     PREPARED = "PREPARED"
     PR_CREATED = "PR_CREATED"
     PR_FAILED = "PR_FAILED"
+    FAILED = "FAILED"
 
 
 class GitOpsChangeResult(BaseModel):

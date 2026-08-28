@@ -39,6 +39,25 @@ class GitOpsChangeWorkflow:
     ) -> GitOpsChangeResult:
         """Prepare a GitOps change only when Phase 7 validation approves it."""
         audit = self._audit_metadata(validated)
+        try:
+            return await self._prepare_change(validated, audit)
+        except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+            log.error(
+                "gitops_change_failed",
+                error=str(exc),
+                **audit,
+            )
+            return self._result(
+                GitOpsChangeStatus.FAILED,
+                f"GitOps change preparation failed safely: {exc}",
+                audit,
+            )
+
+    async def _prepare_change(
+        self,
+        validated: ValidatedRecommendation,
+        audit: dict[str, object],
+    ) -> GitOpsChangeResult:
         recommendation = validated.recommendation
         validation = validated.validation
 

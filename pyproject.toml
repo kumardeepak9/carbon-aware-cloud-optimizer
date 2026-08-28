@@ -55,6 +55,7 @@ dev = [
 
 [project.scripts]
 greenops-agent = "agent.agent:main"
+greenops-health = "agent.health_cli:main"
 greenops-gitops = "gitops.cli:main"
 greenops-report = "reporting.report:main"
 
