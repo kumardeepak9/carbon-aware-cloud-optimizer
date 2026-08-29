@@ -82,7 +82,7 @@ gitops:  ## Prepare a review-first GreenOps GitOps change
 	$(PYTHON) -m gitops.cli
 
 report:  ## Generate a GreenOps weekly report
-	$(PYTHON) -m reporting.report
+	$(PYTHON) -m reports.report
 
 # ---------------------------------------------------------------------------
 # Housekeeping

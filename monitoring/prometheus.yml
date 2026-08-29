@@ -4,10 +4,10 @@
 # This file is mounted into the Prometheus container (see docker-compose.yml).
 # Targets:
 #   1. GreenOps demo workload (pull-based via pod annotations)
-#   2. GreenOps AI agent (pull-based)
-#   3. kube-state-metrics (Deployment/ReplicaSet/Pod state)
-#   4. node-exporter (Node CPU, memory, disk)
-#   5. Prometheus itself (self-scrape)
+#   2. kube-state-metrics (Deployment/ReplicaSet/Pod state)
+#   3. node-exporter (Node CPU, memory, disk)
+#   4. Prometheus itself (self-scrape)
+#   5. Carbon exporter (Electricity Maps → Prometheus)
 # =============================================================================
 
 global:
@@ -43,7 +43,7 @@ scrape_configs:
   # ── 1. GreenOps demo workload ────────────────────────────────────────────
   - job_name: "greenops-demo-workload"
     static_configs:
-      - targets: ["agent:8000"]   # Docker Compose service name
+      - targets: ["workload:8080"]   # Docker Compose service name
     metrics_path: /metrics
     relabel_configs:
       - target_label: namespace
@@ -51,16 +51,7 @@ scrape_configs:
       - target_label: deployment
         replacement: greenops-demo-workload
 
-  # ── 2. GreenOps AI agent ─────────────────────────────────────────────────
-  - job_name: "greenops-agent"
-    static_configs:
-      - targets: ["agent:8001"]   # Agent's own metrics port
-    metrics_path: /metrics
-    relabel_configs:
-      - target_label: component
-        replacement: agent
-
-  # ── 3. kube-state-metrics ────────────────────────────────────────────────
+  # ── 2. kube-state-metrics ────────────────────────────────────────────────
   # Provides: kube_deployment_*, kube_pod_*, kube_node_*, etc.
   # Install: kubectl apply -f https://github.com/kubernetes/kube-state-metrics/releases
   - job_name: "kube-state-metrics"
@@ -68,25 +59,25 @@ scrape_configs:
       - targets: ["kube-state-metrics:8080"]
     honor_labels: true
 
-  # ── 4. node-exporter ─────────────────────────────────────────────────────
+  # ── 3. node-exporter ─────────────────────────────────────────────────────
   # Provides: node_cpu_*, node_memory_*, node_filesystem_*, etc.
   # Install via Helm: helm install node-exporter prometheus-community/prometheus-node-exporter
   - job_name: "node-exporter"
     static_configs:
       - targets: ["node-exporter:9100"]
 
-  # ── 5. Prometheus self-scrape ─────────────────────────────────────────────
+  # ── 4. Prometheus self-scrape ─────────────────────────────────────────────
   - job_name: "prometheus"
     static_configs:
       - targets: ["localhost:9090"]
 
-  # ── 6. Pushgateway (for batch agent metrics) ──────────────────────────────
+  # ── 5. Pushgateway (for batch agent metrics) ──────────────────────────────
   - job_name: "pushgateway"
     honor_labels: true
     static_configs:
       - targets: ["pushgateway:9091"]
 
-  # ── 7. Carbon metrics exporter (Electricity Maps → Prometheus) ────────────
+  # ── 6. Carbon metrics exporter (Electricity Maps → Prometheus) ────────────
   # Exposes: greenops_carbon_intensity_gco2_per_kwh, greenops_carbon_renewable_percentage,
   #          greenops_carbon_fossil_fuel_percentage, greenops_carbon_low_carbon_percentage,
   #          greenops_carbon_last_update_timestamp_seconds, greenops_carbon_data_available,
@@ -97,7 +88,7 @@ scrape_configs:
   # resources — values change at most every 5 minutes.
   - job_name: "greenops-carbon-exporter"
     static_configs:
-      - targets: ["agent:8002"]   # Carbon exporter pull endpoint (port 8002)
+      - targets: ["carbon-exporter:8002"]   # Carbon exporter pull endpoint (port 8002)
     metrics_path: /metrics
     scrape_interval: 60s
     scrape_timeout: 15s

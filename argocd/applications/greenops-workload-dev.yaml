@@ -58,17 +58,7 @@ spec:
       - CreateNamespace=true       # Create the greenops namespace if absent
       - PrunePropagationPolicy=foreground
       - PruneLast=true             # Delete old resources only after new ones are ready
-      - RespectIgnoreDifferences=true
 
   # ── Health checks ─────────────────────────────────────────────────────────
   # Argo CD built-in health checks apply for Deployment, Service, ConfigMap.
   # No custom health checks are required for this workload.
-
-  # ── Ignore differences ────────────────────────────────────────────────────
-  # Prevent Argo CD from reverting fields managed by HPA or other controllers.
-  ignoreDifferences:
-    - group: apps
-      kind: Deployment
-      jsonPointers:
-        - /spec/replicas    # Only revert replicas when a GreenOps commit changes them;
-                            # do not fight with any HPA that may co-exist.

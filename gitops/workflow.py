@@ -279,7 +279,7 @@ class GitOpsChangeWorkflow:
         basis = recommendation.metadata.decision_basis.replace("_", "-")
         raw = (
             f"{self.settings.branch_prefix}/"
-            f"{recommendation.action.value.lower()}-"
+            f"{recommendation.action.value.lower().replace('_', '-')}-"
             f"{self.settings.deployment_name}-to-{target}-{basis}"
         )
         return re.sub(r"[^a-zA-Z0-9._/-]+", "-", raw).strip("-").lower()
