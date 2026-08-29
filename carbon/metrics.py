@@ -47,14 +47,14 @@ greenops_carbon_data_available              Gauge
 
 greenops_carbon_scrape_errors_total         Counter
     Cumulative count of fetch or parse failures, labelled by error_type.
+    Values include 'connection', 'http', 'parse', 'rate_limit', 'stale', and
+    'timeout'.
 
 greenops_carbon_scrape_duration_seconds     Histogram
     Duration of each Electricity Maps API fetch cycle.
 """
 
 from __future__ import annotations
-
-from typing import Optional
 
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
@@ -123,7 +123,8 @@ CARBON_SCRAPE_ERRORS_TOTAL = Counter(
     name="greenops_carbon_scrape_errors_total",
     documentation=(
         "Cumulative count of Electricity Maps fetch or parse failures. "
-        "Labelled by error_type: 'connection', 'http', 'parse', 'timeout'."
+        "Labelled by error_type: 'connection', 'http', 'parse', 'rate_limit', "
+        "'stale', 'timeout'."
     ),
     labelnames=["zone", "error_type"],
 )
@@ -160,7 +161,7 @@ class CarbonMetrics:
     allow the exporter to be tested with isolated registries.
     """
 
-    def __init__(self, registry: Optional[CollectorRegistry] = None) -> None:
+    def __init__(self, registry: CollectorRegistry | None = None) -> None:
         """
         Initialise metric objects.
 
@@ -232,7 +233,8 @@ class CarbonMetrics:
             "greenops_carbon_scrape_errors_total",
             (
                 "Cumulative count of Electricity Maps fetch or parse failures. "
-                "Labelled by error_type: 'connection', 'http', 'parse', 'timeout'."
+                "Labelled by error_type: 'connection', 'http', 'parse', "
+                "'rate_limit', 'stale', 'timeout'."
             ),
             labelnames=["zone", "error_type"],
             **kwargs,

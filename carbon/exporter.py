@@ -53,17 +53,18 @@ Usage::
 from __future__ import annotations
 
 import time
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
-from config import get_logger
 from carbon.metrics import CarbonMetrics
 from carbon.models import (
     CarbonIntensityResponse,
     ElectricityMapsData,
     PowerBreakdownResponse,
+    validate_electricity_maps_zone,
 )
+from config import get_logger
 
 log = get_logger(__name__)
 
@@ -73,6 +74,8 @@ log = get_logger(__name__)
 _ERR_CONNECTION = "connection"
 _ERR_HTTP = "http"
 _ERR_PARSE = "parse"
+_ERR_RATE_LIMIT = "rate_limit"
+_ERR_STALE = "stale"
 _ERR_TIMEOUT = "timeout"
 
 
@@ -112,15 +115,17 @@ class CarbonMetricsExporter:
         zone: str = "DE",
         base_url: str = "https://api.electricitymap.org/v3",
         timeout_seconds: float = 10.0,
-        metrics: Optional[CarbonMetrics] = None,
+        max_data_age_seconds: float | None = None,
+        metrics: CarbonMetrics | None = None,
     ) -> None:
         # Store API key privately — never logged, never included in metrics
         self._api_key = api_key
-        self._zone = zone
+        self._zone = validate_electricity_maps_zone(zone)
         self._base_url = base_url.rstrip("/")
         self._timeout = httpx.Timeout(timeout_seconds)
+        self._max_data_age_seconds = max_data_age_seconds
         self._metrics = metrics if metrics is not None else CarbonMetrics()
-        self._http: Optional[httpx.AsyncClient] = None
+        self._http: httpx.AsyncClient | None = None
 
     # ------------------------------------------------------------------
     # Async context manager / lifecycle
@@ -143,7 +148,7 @@ class CarbonMetricsExporter:
             await self._http.aclose()
             self._http = None
 
-    async def __aenter__(self) -> "CarbonMetricsExporter":
+    async def __aenter__(self) -> CarbonMetricsExporter:
         await self.open()
         return self
 
@@ -163,7 +168,7 @@ class CarbonMetricsExporter:
     # Public: main update method
     # ------------------------------------------------------------------
 
-    async def update(self) -> Optional[ElectricityMapsData]:
+    async def update(self) -> ElectricityMapsData | None:
         """
         Fetch Electricity Maps data and update all Prometheus metrics.
 
@@ -186,13 +191,10 @@ class CarbonMetricsExporter:
             log.error(
                 "carbon.exporter.unexpected_error",
                 zone=self._zone,
-                error=str(exc),
+                error=self._safe_error(exc),
                 exc_info=True,
             )
-            self._metrics.data_available.labels(zone=self._zone).set(0)
-            self._metrics.scrape_errors_total.labels(
-                zone=self._zone, error_type=_ERR_PARSE
-            ).inc()
+            self._mark_unavailable(_ERR_PARSE)
             return None
         finally:
             duration = time.perf_counter() - t0
@@ -202,7 +204,17 @@ class CarbonMetricsExporter:
             # _fetch_and_parse already updated metrics and logged the error
             return None
 
-        # ----------- Successful fetch: update all metrics -----------
+        if self._is_stale(data):
+            self._mark_unavailable(_ERR_STALE)
+            age = time.time() - data.data_timestamp_unix
+            log.warning(
+                "carbon.exporter.stale_data",
+                zone=self._zone,
+                data_age_seconds=round(age, 3),
+                max_data_age_seconds=self._max_data_age_seconds,
+            )
+            return None
+
         self._update_metrics(data)
         log.info(
             "carbon.exporter.update_success",
@@ -218,7 +230,7 @@ class CarbonMetricsExporter:
     # Private: fetch + parse
     # ------------------------------------------------------------------
 
-    async def _fetch_and_parse(self) -> Optional[ElectricityMapsData]:
+    async def _fetch_and_parse(self) -> ElectricityMapsData | None:
         """
         Fetch from Electricity Maps and return normalised data.
 
@@ -241,7 +253,7 @@ class CarbonMetricsExporter:
 
     async def _fetch_carbon_intensity(
         self, params: dict
-    ) -> Optional[CarbonIntensityResponse]:
+    ) -> CarbonIntensityResponse | None:
         """
         Fetch /carbon-intensity/latest.
 
@@ -257,32 +269,24 @@ class CarbonMetricsExporter:
                 zone=self._zone,
                 path=self._INTENSITY_PATH,
             )
-            self._metrics.data_available.labels(zone=self._zone).set(0)
-            self._metrics.scrape_errors_total.labels(
-                zone=self._zone, error_type=_ERR_TIMEOUT
-            ).inc()
+            self._mark_unavailable(_ERR_TIMEOUT)
             return None
         except httpx.HTTPStatusError as exc:
+            error_type = _ERR_RATE_LIMIT if exc.response.status_code == 429 else _ERR_HTTP
             log.warning(
                 "carbon.exporter.intensity_http_error",
                 zone=self._zone,
                 status_code=exc.response.status_code,
             )
-            self._metrics.data_available.labels(zone=self._zone).set(0)
-            self._metrics.scrape_errors_total.labels(
-                zone=self._zone, error_type=_ERR_HTTP
-            ).inc()
+            self._mark_unavailable(error_type)
             return None
         except httpx.HTTPError as exc:
             log.warning(
                 "carbon.exporter.intensity_connection_error",
                 zone=self._zone,
-                error=str(exc),
+                error=self._safe_error(exc),
             )
-            self._metrics.data_available.labels(zone=self._zone).set(0)
-            self._metrics.scrape_errors_total.labels(
-                zone=self._zone, error_type=_ERR_CONNECTION
-            ).inc()
+            self._mark_unavailable(_ERR_CONNECTION)
             return None
 
         try:
@@ -291,17 +295,14 @@ class CarbonMetricsExporter:
             log.warning(
                 "carbon.exporter.intensity_parse_error",
                 zone=self._zone,
-                error=str(exc),
+                error=self._safe_error(exc),
             )
-            self._metrics.data_available.labels(zone=self._zone).set(0)
-            self._metrics.scrape_errors_total.labels(
-                zone=self._zone, error_type=_ERR_PARSE
-            ).inc()
+            self._mark_unavailable(_ERR_PARSE)
             return None
 
     async def _fetch_power_breakdown(
         self, params: dict
-    ) -> Optional[PowerBreakdownResponse]:
+    ) -> PowerBreakdownResponse | None:
         """
         Fetch /power-breakdown/latest.
 
@@ -324,14 +325,14 @@ class CarbonMetricsExporter:
             log.debug(
                 "carbon.exporter.breakdown_http_error",
                 zone=self._zone,
-                error=str(exc),
+                error=self._safe_error(exc),
             )
             return None
         except Exception as exc:  # noqa: BLE001
             log.debug(
                 "carbon.exporter.breakdown_unexpected",
                 zone=self._zone,
-                error=str(exc),
+                error=self._safe_error(exc),
             )
             return None
 
@@ -341,7 +342,7 @@ class CarbonMetricsExporter:
             log.debug(
                 "carbon.exporter.breakdown_parse_error",
                 zone=self._zone,
-                error=str(exc),
+                error=self._safe_error(exc),
             )
             return None
 
@@ -382,3 +383,21 @@ class CarbonMetricsExporter:
             self._metrics.low_carbon_percentage.labels(zone=zone).set(
                 data.low_carbon_percentage
             )
+
+    def _mark_unavailable(self, error_type: str) -> None:
+        """Record a failed or unsafe carbon fetch without raising."""
+        self._metrics.data_available.labels(zone=self._zone).set(0)
+        self._metrics.scrape_errors_total.labels(
+            zone=self._zone, error_type=error_type
+        ).inc()
+
+    def _is_stale(self, data: ElectricityMapsData) -> bool:
+        if self._max_data_age_seconds is None:
+            return False
+        return time.time() - data.data_timestamp_unix > self._max_data_age_seconds
+
+    def _safe_error(self, exc: BaseException) -> str:
+        message = str(exc)
+        if self._api_key:
+            message = message.replace(self._api_key, "[redacted]")
+        return message

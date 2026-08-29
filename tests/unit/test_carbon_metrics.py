@@ -17,13 +17,15 @@ Strategy
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import patch
 
+import httpx
 import pytest
 import respx
 from httpx import Response
 from prometheus_client import CollectorRegistry, generate_latest
+from pydantic import ValidationError
 
 from carbon.exporter import CarbonMetricsExporter
 from carbon.metrics import CarbonMetrics
@@ -32,6 +34,7 @@ from carbon.models import (
     ElectricityMapsData,
     PowerBreakdownResponse,
 )
+from config.settings import ElectricityMapsSettings
 
 # ---------------------------------------------------------------------------
 # Shared test fixtures and helpers
@@ -83,13 +86,18 @@ def _fresh_metrics() -> CarbonMetrics:
     return CarbonMetrics(registry=CollectorRegistry())
 
 
-def _fresh_exporter(metrics: CarbonMetrics | None = None) -> CarbonMetricsExporter:
+def _fresh_exporter(
+    metrics: CarbonMetrics | None = None,
+    *,
+    max_data_age_seconds: float | None = None,
+) -> CarbonMetricsExporter:
     """Return an exporter wired to an isolated metrics registry."""
     m = metrics if metrics is not None else _fresh_metrics()
     return CarbonMetricsExporter(
         api_key=FAKE_API_KEY,
         zone=FAKE_ZONE,
         base_url=FAKE_BASE_URL,
+        max_data_age_seconds=max_data_age_seconds,
         metrics=m,
     )
 
@@ -136,14 +144,14 @@ class TestCarbonIntensityModel:
     def test_datetime_is_utc(self) -> None:
         payload = _intensity_payload(dt="2024-06-01T08:30:00.000Z")
         model = CarbonIntensityResponse.model_validate(payload)
-        assert model.datetime_utc.tzinfo == timezone.utc
+        assert model.datetime_utc.tzinfo == UTC
         assert model.datetime_utc.hour == 8
         assert model.datetime_utc.minute == 30
 
     def test_null_carbon_intensity_raises(self) -> None:
         payload = _intensity_payload()
         payload["carbonIntensity"] = None
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             CarbonIntensityResponse.model_validate(payload)
 
     def test_integer_carbon_intensity_coerced_to_float(self) -> None:
@@ -151,6 +159,21 @@ class TestCarbonIntensityModel:
         model = CarbonIntensityResponse.model_validate(payload)
         assert isinstance(model.carbon_intensity, float)
         assert model.carbon_intensity == pytest.approx(200.0)
+
+    def test_zone_is_normalized_to_uppercase(self) -> None:
+        payload = _intensity_payload(zone="us-cal-ciso")
+        model = CarbonIntensityResponse.model_validate(payload)
+        assert model.zone == "US-CAL-CISO"
+
+    def test_invalid_zone_raises(self) -> None:
+        payload = _intensity_payload(zone="../DE")
+        with pytest.raises(ValidationError):
+            CarbonIntensityResponse.model_validate(payload)
+
+    def test_negative_carbon_intensity_raises(self) -> None:
+        payload = _intensity_payload(carbon_intensity=-1.0)
+        with pytest.raises(ValidationError):
+            CarbonIntensityResponse.model_validate(payload)
 
 
 class TestPowerBreakdownModel:
@@ -183,8 +206,27 @@ class TestPowerBreakdownModel:
     def test_missing_zone_raises(self) -> None:
         payload = _breakdown_payload()
         del payload["zone"]
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PowerBreakdownResponse.model_validate(payload)
+
+    def test_missing_generation_import_export_fields_do_not_fail(self) -> None:
+        payload = _breakdown_payload()
+        del payload["powerConsumptionBreakdown"]
+        model = PowerBreakdownResponse.model_validate(payload)
+        assert model.renewable_percentage == pytest.approx(52.0)
+
+    def test_missing_optional_percentage_fields_are_none(self) -> None:
+        payload = {"zone": "DE", "datetime": "2024-01-15T12:00:00.000Z"}
+        model = PowerBreakdownResponse.model_validate(payload)
+        assert model.renewable_percentage is None
+        assert model.fossil_fuel_percentage is None
+        assert model.low_carbon_percentage is None
+
+    def test_out_of_range_percentage_is_ignored(self) -> None:
+        payload = _breakdown_payload(renewable_pct=101.0, fossil_pct=-1.0)
+        model = PowerBreakdownResponse.model_validate(payload)
+        assert model.renewable_percentage is None
+        assert model.fossil_fuel_percentage is None
 
 
 class TestElectricityMapsDataModel:
@@ -221,8 +263,34 @@ class TestElectricityMapsDataModel:
         data = ElectricityMapsData.from_api_responses(self._make_intensity())
         ts = data.data_timestamp_unix
         # Must be a plausible Unix timestamp (after year 2020)
-        assert ts > datetime(2020, 1, 1, tzinfo=timezone.utc).timestamp()
+        assert ts > datetime(2020, 1, 1, tzinfo=UTC).timestamp()
         assert isinstance(ts, float)
+
+    def test_mismatched_breakdown_zone_is_ignored(self) -> None:
+        data = ElectricityMapsData.from_api_responses(
+            self._make_intensity(150.0),
+            PowerBreakdownResponse.model_validate(_breakdown_payload(zone="FR")),
+        )
+        assert data.zone == "DE"
+        assert data.renewable_percentage is None
+
+
+class TestElectricityMapsSettings:
+    """Settings-level validation for the configured Electricity Maps zone."""
+
+    def test_zone_from_environment_is_normalized(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ELECTRICITY_MAPS_API_KEY", FAKE_API_KEY)
+        monkeypatch.setenv("ELECTRICITY_MAPS_ZONE", "us-cal-ciso")
+        settings = ElectricityMapsSettings()
+        assert settings.zone == "US-CAL-CISO"
+
+    def test_invalid_zone_from_environment_is_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ELECTRICITY_MAPS_API_KEY", FAKE_API_KEY)
+        monkeypatch.setenv("ELECTRICITY_MAPS_ZONE", "DE/../../secret")
+        with pytest.raises(ValidationError):
+            ElectricityMapsSettings()
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +404,7 @@ class TestCarbonMetricsExporterSuccessfulUpdate:
         exporter = _fresh_exporter(metrics)
 
         dt_str = "2024-06-15T10:30:00.000Z"
-        expected_ts = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc).timestamp()
+        expected_ts = datetime(2024, 6, 15, 10, 30, 0, tzinfo=UTC).timestamp()
 
         respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
             return_value=Response(200, json=_intensity_payload(dt=dt_str))
@@ -411,6 +479,119 @@ class TestCarbonMetricsExporterUnavailable:
 
         err_val = _counter_value(metrics, "scrape_errors_total", error_type="http")
         assert err_val == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_unauthorized_response_sets_data_unavailable(self) -> None:
+        metrics = _fresh_metrics()
+        exporter = _fresh_exporter(metrics)
+
+        respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
+            return_value=Response(401, text="Unauthorized")
+        )
+
+        async with exporter:
+            result = await exporter.update()
+
+        assert result is None
+        assert _gauge_value(metrics, "data_available") == pytest.approx(0.0)
+        assert _counter_value(metrics, "scrape_errors_total", error_type="http") == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_rate_limit_response_is_classified(self) -> None:
+        metrics = _fresh_metrics()
+        exporter = _fresh_exporter(metrics)
+
+        respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
+            return_value=Response(429, text="Too Many Requests")
+        )
+
+        async with exporter:
+            result = await exporter.update()
+
+        assert result is None
+        assert _gauge_value(metrics, "data_available") == pytest.approx(0.0)
+        assert _counter_value(
+            metrics, "scrape_errors_total", error_type="rate_limit"
+        ) == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_timeout_sets_data_unavailable_and_timeout_counter(self) -> None:
+        metrics = _fresh_metrics()
+        exporter = _fresh_exporter(metrics)
+
+        respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
+            side_effect=httpx.TimeoutException("timed out")
+        )
+
+        async with exporter:
+            result = await exporter.update()
+
+        assert result is None
+        assert _gauge_value(metrics, "data_available") == pytest.approx(0.0)
+        assert _counter_value(
+            metrics, "scrape_errors_total", error_type="timeout"
+        ) == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_malformed_json_sets_parse_error(self) -> None:
+        metrics = _fresh_metrics()
+        exporter = _fresh_exporter(metrics)
+
+        respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
+            return_value=Response(200, content=b"{not-json")
+        )
+
+        async with exporter:
+            result = await exporter.update()
+
+        assert result is None
+        assert _gauge_value(metrics, "data_available") == pytest.approx(0.0)
+        assert _counter_value(metrics, "scrape_errors_total", error_type="parse") == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_missing_required_fields_sets_parse_error(self) -> None:
+        metrics = _fresh_metrics()
+        exporter = _fresh_exporter(metrics)
+
+        respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
+            return_value=Response(200, json={"zone": "DE", "carbonIntensity": 100.0})
+        )
+
+        async with exporter:
+            result = await exporter.update()
+
+        assert result is None
+        assert _counter_value(metrics, "scrape_errors_total", error_type="parse") == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_error_logs_do_not_expose_api_key(self) -> None:
+        metrics = _fresh_metrics()
+        exporter = _fresh_exporter(metrics)
+
+        respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
+            side_effect=httpx.ConnectError(f"token leaked: {FAKE_API_KEY}")
+        )
+
+        with patch("carbon.exporter.log.warning") as warning:
+            async with exporter:
+                await exporter.update()
+
+        logged = " ".join(
+            [str(arg) for call in warning.call_args_list for arg in call.args]
+            + [
+                str(value)
+                for call in warning.call_args_list
+                for value in call.kwargs.values()
+            ]
+        )
+        assert FAKE_API_KEY not in logged
+        assert "[redacted]" in logged
 
     @pytest.mark.asyncio
     @respx.mock
@@ -576,7 +757,7 @@ class TestCarbonMetricsExporterPartialData:
             await exporter.update()
 
         # Counter must remain at 0 for all error_type values
-        for err_type in ("connection", "http", "parse", "timeout"):
+        for err_type in ("connection", "http", "parse", "rate_limit", "stale", "timeout"):
             val = _counter_value(metrics, "scrape_errors_total", error_type=err_type)
             assert val == pytest.approx(0.0), f"error_type={err_type} should be 0"
 
@@ -625,7 +806,7 @@ class TestCarbonMetricsTimestampHandling:
 
         # Use a known datetime
         iso_str = "2024-03-20T14:00:00.000Z"
-        expected_epoch = datetime(2024, 3, 20, 14, 0, 0, tzinfo=timezone.utc).timestamp()
+        expected_epoch = datetime(2024, 3, 20, 14, 0, 0, tzinfo=UTC).timestamp()
 
         respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
             return_value=Response(200, json=_intensity_payload(dt=iso_str))
@@ -653,7 +834,7 @@ class TestCarbonMetricsTimestampHandling:
         exporter = _fresh_exporter(metrics)
 
         # Use a datetime 30 minutes in the past
-        old_dt = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        old_dt = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
         old_iso = old_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
@@ -679,7 +860,7 @@ class TestCarbonMetricsTimestampHandling:
         exporter = _fresh_exporter(metrics)
 
         # Use a datetime very close to now
-        now_iso = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        now_iso = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
             return_value=Response(200, json=_intensity_payload(dt=now_iso))
@@ -694,6 +875,29 @@ class TestCarbonMetricsTimestampHandling:
         ts_val = _gauge_value(metrics, "last_update_timestamp")
         staleness = time.time() - ts_val
         assert staleness < 600  # should NOT trigger the stale alert
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_stale_data_is_marked_unavailable_when_max_age_configured(self) -> None:
+        metrics = _fresh_metrics()
+        exporter = _fresh_exporter(metrics, max_data_age_seconds=600.0)
+
+        old_iso = "2024-01-01T00:00:00.000Z"
+        respx.get(f"{FAKE_BASE_URL}/carbon-intensity/latest").mock(
+            return_value=Response(200, json=_intensity_payload(dt=old_iso))
+        )
+        respx.get(f"{FAKE_BASE_URL}/power-breakdown/latest").mock(
+            return_value=Response(200, json=_breakdown_payload(dt=old_iso))
+        )
+
+        async with exporter:
+            result = await exporter.update()
+
+        assert result is None
+        assert _gauge_value(metrics, "data_available") == pytest.approx(0.0)
+        assert _counter_value(
+            metrics, "scrape_errors_total", error_type="stale"
+        ) == pytest.approx(1.0)
 
 
 # ---------------------------------------------------------------------------

@@ -32,9 +32,10 @@ from __future__ import annotations
 
 import asyncio
 import signal
+from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
-from typing import Any, Optional
+from typing import Any
 
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -116,6 +117,7 @@ class CarbonMetricsServer:
         port: int = 8002,
         poll_interval_seconds: int = 60,
         base_url: str = "https://api.electricitymap.org/v3",
+        max_data_age_seconds: float | None = None,
     ) -> None:
         self._zone = zone
         self._port = port
@@ -128,10 +130,11 @@ class CarbonMetricsServer:
             api_key=api_key,
             zone=zone,
             base_url=base_url,
+            max_data_age_seconds=max_data_age_seconds,
             metrics=self._metrics,
         )
-        self._http_server: Optional[HTTPServer] = None
-        self._http_thread: Optional[Thread] = None
+        self._http_server: HTTPServer | None = None
+        self._http_thread: Thread | None = None
         self._running = False
 
     # ------------------------------------------------------------------
@@ -213,11 +216,8 @@ class CarbonMetricsServer:
             stop_event.set()
 
         for sig in (signal.SIGTERM, signal.SIGINT):
-            try:
+            with suppress(NotImplementedError, RuntimeError):
                 loop.add_signal_handler(sig, _on_signal)
-            except (NotImplementedError, RuntimeError):
-                # Windows / non-main-thread fallback
-                pass
 
         try:
             poll_task = asyncio.create_task(self.run_forever())
@@ -248,6 +248,7 @@ async def main() -> None:
         port=settings.prometheus.metrics_export_port + 2,  # 8000 + 2 = 8002
         poll_interval_seconds=settings.agent.poll_interval_seconds,
         base_url=settings.electricity_maps.base_url,
+        max_data_age_seconds=settings.agent.max_carbon_data_age_seconds,
     )
     await server.run()
 

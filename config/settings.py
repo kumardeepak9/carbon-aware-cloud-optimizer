@@ -15,12 +15,30 @@ Usage::
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_ELECTRICITY_MAPS_ZONE_PATTERN = re.compile(r"^[A-Z0-9]{2,}(?:-[A-Z0-9]+)*$")
+
+
+def _validate_electricity_maps_zone(value: object) -> str:
+    if not isinstance(value, str):
+        raise ValueError("ELECTRICITY_MAPS_ZONE must be a string")
+    zone = value.strip().upper()
+    if not zone:
+        raise ValueError("ELECTRICITY_MAPS_ZONE must not be empty")
+    if len(zone) > 64:
+        raise ValueError("ELECTRICITY_MAPS_ZONE is too long")
+    if not _ELECTRICITY_MAPS_ZONE_PATTERN.fullmatch(zone):
+        raise ValueError(
+            "ELECTRICITY_MAPS_ZONE must contain only letters, numbers, and hyphens"
+        )
+    return zone
 
 
 class AppSettings(BaseSettings):
@@ -59,6 +77,11 @@ class ElectricityMapsSettings(BaseSettings):
         ge=30,
         description="TTL for cached carbon-intensity responses.",
     )
+
+    @field_validator("zone", mode="before")
+    @classmethod
+    def zone_must_be_valid(cls, v: object) -> str:
+        return _validate_electricity_maps_zone(v)
 
     model_config = SettingsConfigDict(
         env_prefix="ELECTRICITY_MAPS_",
@@ -174,7 +197,7 @@ class AgentSettings(BaseSettings):
         return v
 
     @model_validator(mode="after")
-    def replica_bounds_are_consistent(self) -> "AgentSettings":
+    def replica_bounds_are_consistent(self) -> AgentSettings:
         if self.min_replicas > self.max_replicas:
             raise ValueError("AGENT_MIN_REPLICAS must be less than or equal to AGENT_MAX_REPLICAS")
         return self
@@ -227,7 +250,7 @@ class GitOpsSettings(BaseSettings):
     )
 
     @model_validator(mode="after")
-    def gitops_settings_are_safe(self) -> "GitOpsSettings":
+    def gitops_settings_are_safe(self) -> GitOpsSettings:
         if self.manifest_path.is_absolute():
             raise ValueError("GREENOPS_GITOPS_MANIFEST_PATH must be relative to repo_path")
         if ".." in self.manifest_path.parts:
