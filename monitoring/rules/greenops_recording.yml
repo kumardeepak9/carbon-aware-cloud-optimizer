@@ -20,7 +20,7 @@ groups:
           sum(rate(container_cpu_usage_seconds_total{
             namespace="greenops",
             pod=~"greenops-demo-workload-.*",
-            container="greenops-demo-workload"
+            container="workload"
           }[2m]))
         labels:
           deployment: greenops-demo-workload
@@ -45,7 +45,7 @@ groups:
           sum(container_memory_working_set_bytes{
             namespace="greenops",
             pod=~"greenops-demo-workload-.*",
-            container="greenops-demo-workload"
+            container="workload"
           })
         labels:
           deployment: greenops-demo-workload
@@ -92,10 +92,12 @@ groups:
 
       - record: greenops:workload:http_error_ratio
         expr: |
-          sum(rate(greenops_demo_http_requests_total{
-            namespace="greenops",
-            status_code=~"5.."
-          }[2m]))
+          (
+            sum(rate(greenops_demo_http_requests_total{
+              namespace="greenops",
+              status_code=~"5.."
+            }[2m])) or vector(0)
+          )
           /
           sum(rate(greenops_demo_http_requests_total{
             namespace="greenops"

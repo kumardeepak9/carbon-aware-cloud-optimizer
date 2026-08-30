@@ -69,9 +69,16 @@ class GreenOpsQueries:
         self,
         namespace: str = "greenops",
         deployment: str = "greenops-demo-workload",
+        container: str = "workload",
     ) -> None:
         self._ns = namespace
         self._dep = deployment
+        # cAdvisor/kubelet expose the *container* name from the Pod spec on the
+        # `container` label — for this workload that is `workload`, NOT the
+        # Deployment name (see k8s/base/deployment.yaml). Filtering on the wrong
+        # value makes every container_* query return an empty result, which the
+        # agent's policy treats as missing data and defers on.
+        self._container = container
 
     @property
     def namespace(self) -> str:
@@ -82,6 +89,11 @@ class GreenOpsQueries:
     def deployment(self) -> str:
         """Deployment targeted by this query registry."""
         return self._dep
+
+    @property
+    def container(self) -> str:
+        """Container name (Pod-spec name) targeted by container_* queries."""
+        return self._container
 
     # ------------------------------------------------------------------
     # CPU
@@ -99,7 +111,7 @@ class GreenOpsQueries:
                 f'sum(rate(container_cpu_usage_seconds_total{{'
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
-                f'container="{self._dep}"'
+                f'container="{self._container}"'
                 f"}}[2m]))"
             ),
             unit="cores",
@@ -114,7 +126,7 @@ class GreenOpsQueries:
                 f'sum(rate(container_cpu_usage_seconds_total{{'
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
-                f'container="{self._dep}"'
+                f'container="{self._container}"'
                 f"}}[2m])) / "
                 f'sum(kube_pod_container_resource_requests{{'
                 f'namespace="{self._ns}",'
@@ -138,7 +150,7 @@ class GreenOpsQueries:
                 f'sum(container_memory_working_set_bytes{{'
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
-                f'container="{self._dep}"'
+                f'container="{self._container}"'
                 f"}})"
             ),
             unit="bytes",
@@ -153,7 +165,7 @@ class GreenOpsQueries:
                 f'sum(container_memory_working_set_bytes{{'
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
-                f'container="{self._dep}"'
+                f'container="{self._container}"'
                 f"}}) / "
                 f'sum(kube_pod_container_resource_requests{{'
                 f'namespace="{self._ns}",'
@@ -237,27 +249,44 @@ class GreenOpsQueries:
     # ------------------------------------------------------------------
 
     def http_request_rate(self) -> QuerySpec:
-        """Total HTTP request rate across all workload pods."""
+        """Total HTTP request rate across all workload pods.
+
+        ``or vector(0)`` coerces the "no matching series yet" case (fresh pod,
+        no requests in the window) to an explicit 0 rps. Without it the query
+        returns an empty result, which the agent policy cannot distinguish from
+        "metric unavailable" and defers on.
+
+        Note: this counts *every* endpoint, including the Kubernetes liveness/
+        readiness probes and Prometheus' own ``/metrics`` scrapes, so a fully
+        idle workload still reports a small non-zero rate. See monitoring/README.md.
+        """
         return QuerySpec(
             name="http_request_rate_rps",
             expr=(
                 f'sum(rate(greenops_demo_http_requests_total{{'
                 f'namespace="{self._ns}"'
-                f"}}[2m]))"
+                f"}}[2m])) or vector(0)"
             ),
             unit="rps",
             description="HTTP requests per second across all workload pods (2-min rate).",
         )
 
     def http_error_rate(self) -> QuerySpec:
-        """Rate of 5xx HTTP errors — used as a safety guard before scaling down."""
+        """Rate of 5xx HTTP errors — used as a safety guard before scaling down.
+
+        ``or vector(0)`` is essential here: on a healthy workload the
+        ``status_code=~"5.."`` series never exists, so ``sum(rate(...))`` returns
+        an empty result rather than 0. The agent treats a missing required
+        signal as a reason to defer, so without the coercion the agent would
+        never act on a workload that has simply never returned a 5xx.
+        """
         return QuerySpec(
             name="http_error_rate_rps",
             expr=(
                 f'sum(rate(greenops_demo_http_requests_total{{'
                 f'namespace="{self._ns}",'
                 f'status_code=~"5.."'
-                f"}}[2m]))"
+                f"}}[2m])) or vector(0)"
             ),
             unit="rps",
             description="HTTP 5xx error rate — agent blocks scale-down if elevated.",
@@ -392,8 +421,8 @@ class GreenOpsQueries:
         return QuerySpec(
             name="agent_poll_latency_seconds",
             expr=(
-                "histogram_quantile(0.95, rate("
-                "greenops_agent_poll_duration_seconds_bucket[5m]))"
+                "histogram_quantile(0.95, sum(rate("
+                "greenops_agent_poll_duration_seconds_bucket[5m])) by (le))"
             ),
             unit="seconds",
             description="P95 agent poll cycle latency.",

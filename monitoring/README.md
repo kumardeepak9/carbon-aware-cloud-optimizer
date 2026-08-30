@@ -56,6 +56,43 @@ They form the **complete observation state** the AI agent uses to make scaling d
 | `carbon_data_available` | `greenops_carbon_data_available` | boolean | carbon/ layer | Data safety guard |
 | `carbon_last_update_timestamp_seconds` | `greenops_carbon_last_update_timestamp_seconds` | seconds | carbon/ layer | Stale-data safety guard |
 
+### Required metric sources (environment prerequisites)
+
+The agent's `DecisionPolicy` treats a *missing* required signal as a reason to
+**defer** (make no recommendation). The `container_*` and `kube_*` inputs above
+are therefore only satisfied in a **Kubernetes** environment that also runs:
+
+| Component | Provides | Needed for |
+|---|---|---|
+| **kube-state-metrics** | `kube_deployment_*`, `kube_pod_container_*` | `replica_count_*`, `*_request_ratio`, `pod_restart_rate` |
+| **kubelet / cAdvisor** | `container_cpu_usage_seconds_total`, `container_memory_working_set_bytes` (with `pod`/`container`/`namespace` labels) | `cpu_*`, `memory_*` |
+| **node-exporter** | `node_cpu_seconds_total`, `node_memory_*` | `node_cpu_utilization_ratio` (required), `node_memory_available_bytes` |
+
+The `docker compose` stack (`docker-compose.yml`) only runs the **workload**,
+the **carbon exporter**, Prometheus and Grafana — it has **no** kube-state-metrics,
+cAdvisor or node-exporter, and no Kubernetes Deployment to report on. In that
+environment only the `greenops_demo_*` and `greenops_carbon_*` inputs resolve,
+so the agent will report an incomplete observation and defer. Run the agent's
+decision loop against a cluster (or a Prometheus federated from one).
+
+The `container` label filter is the Pod-spec container name — `workload` for this
+Deployment, **not** `greenops-demo-workload`. It is configurable:
+`GreenOpsQueries(container=...)`.
+
+### Empty vs. zero
+
+`http_request_rate_rps` and `http_error_rate_rps` append `or vector(0)`: on a
+healthy workload the `status_code=~"5.."` series simply does not exist, so a bare
+`sum(rate(...))` returns an *empty* result rather than `0`. Empty is
+indistinguishable from "metric unavailable" to the policy, which would then defer
+forever on any workload that has never returned a 5xx. The coercion reports a
+true zero instead. Decision thresholds are unchanged.
+
+Note: `http_request_rate_rps` counts **every** endpoint, including the
+liveness/readiness probes and Prometheus' own `/metrics` scrapes, so a fully idle
+workload still reports a small non-zero rate (~0.2 rps at default intervals).
+Treat the low-demand threshold with that floor in mind.
+
 ### Scale-down Safety Guards
 
 The agent will **not** reduce replicas if any of these conditions are true:
@@ -139,8 +176,13 @@ async with PrometheusClient(base_url="http://prometheus:9090") as client:
 ```bash
 make test-unit
 # or directly:
-pytest tests/unit/test_prometheus_client.py tests/unit/test_carbon_metrics.py -v
+pytest tests/unit/test_prometheus_client.py tests/unit/test_prometheus_parsing.py tests/unit/test_carbon_metrics.py -v
 ```
+
+`test_prometheus_parsing.py` covers response parsing and missing-data behaviour:
+non-finite (`NaN`/`Inf`) values dropped, multi-series results surfaced,
+error-envelope vs. connection-error classification, bounded retries, and the
+observation-completeness gauge.
 
 ## Prometheus Rules
 

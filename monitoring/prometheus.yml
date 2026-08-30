@@ -54,6 +54,12 @@ scrape_configs:
   # ── 2. kube-state-metrics ────────────────────────────────────────────────
   # Provides: kube_deployment_*, kube_pod_*, kube_node_*, etc.
   # Install: kubectl apply -f https://github.com/kubernetes/kube-state-metrics/releases
+  #
+  # NOTE: this target does NOT exist in the docker-compose stack — there is no
+  # Kubernetes API for it to read. It resolves only when this config is used by
+  # a Prometheus running in (or federated from) a real cluster. Without it the
+  # agent's replica_count_*, *_request_ratio and pod_restart_rate inputs are
+  # empty and DecisionPolicy defers. See monitoring/README.md.
   - job_name: "kube-state-metrics"
     static_configs:
       - targets: ["kube-state-metrics:8080"]
@@ -62,6 +68,8 @@ scrape_configs:
   # ── 3. node-exporter ─────────────────────────────────────────────────────
   # Provides: node_cpu_*, node_memory_*, node_filesystem_*, etc.
   # Install via Helm: helm install node-exporter prometheus-community/prometheus-node-exporter
+  # Also absent from docker-compose. node_cpu_utilization_ratio is a REQUIRED
+  # agent signal, so a cluster deployment must include node-exporter.
   - job_name: "node-exporter"
     static_configs:
       - targets: ["node-exporter:9100"]

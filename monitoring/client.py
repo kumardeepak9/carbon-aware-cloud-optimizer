@@ -26,13 +26,22 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
+import json
+import math
 import time
 from datetime import datetime
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from config import get_logger
+from monitoring.metrics import (
+    AGENT_OBSERVATION_COMPLETENESS,
+    AGENT_PROMETHEUS_QUERY_DURATION_SECONDS,
+    AGENT_PROMETHEUS_QUERY_ERRORS,
+)
 from monitoring.models import (
     AgentObservation,
     MatrixData,
@@ -114,18 +123,23 @@ class PrometheusClient:
         base_url: str = "http://localhost:9090",
         timeout_seconds: float = 10.0,
         max_retries: int = 2,
+        retry_backoff_seconds: float = 0.2,
     ) -> None:
         """
         Initialise the Prometheus client.
 
         Args:
-            base_url:        Prometheus base URL (no trailing slash).
-            timeout_seconds: Per-request timeout; prevents blocking the agent.
-            max_retries:     Number of retry attempts on transient errors.
+            base_url:              Prometheus base URL (no trailing slash).
+            timeout_seconds:       Per-request timeout; prevents blocking the agent.
+            max_retries:           Extra attempts on transient (connection/timeout)
+                                   errors. Query errors and empty results are never
+                                   retried. 0 disables retrying.
+            retry_backoff_seconds: Base delay between retries (doubled each attempt).
         """
         self._base_url = base_url.rstrip("/")
         self._timeout = httpx.Timeout(timeout_seconds)
-        self._max_retries = max_retries
+        self._max_retries = max(0, max_retries)
+        self._retry_backoff = max(0.0, retry_backoff_seconds)
         self._http: httpx.AsyncClient | None = None
 
     # ------------------------------------------------------------------
@@ -180,6 +194,103 @@ class PrometheusClient:
             return False
 
     # ------------------------------------------------------------------
+    # Shared request execution (retry + error-envelope handling)
+    # ------------------------------------------------------------------
+
+    async def _execute(
+        self,
+        path: str,
+        params: dict[str, Any],
+        query: str,
+    ) -> PrometheusResponse:
+        """
+        Issue one Prometheus API GET, with bounded retries on transient errors.
+
+        Distinguishes the three failure modes the agent cares about:
+
+        - ``PrometheusConnectionError`` — server unreachable / timed out / returned
+          an unparseable body. Retried up to ``max_retries`` times.
+        - ``PrometheusQueryError`` — server understood the request and rejected it
+          (bad PromQL, ``bad_data``, ``unavailable`` …). Prometheus signals this
+          with a JSON ``{"status":"error", ...}`` envelope, often alongside an
+          HTTP 4xx/5xx status, so the body is inspected *before* the HTTP status
+          is treated as a transport failure. Never retried.
+        - success — returned to the caller.
+        """
+        last_exc: PrometheusConnectionError | None = None
+
+        for attempt in range(self._max_retries + 1):
+            try:
+                resp = await self._client.get(path, params=params)
+            except httpx.TimeoutException as exc:
+                last_exc = PrometheusConnectionError(
+                    f"Timeout querying Prometheus ({self._base_url}): {exc}"
+                )
+            except httpx.HTTPError as exc:
+                last_exc = PrometheusConnectionError(
+                    f"HTTP error querying Prometheus ({self._base_url}): {exc}"
+                )
+            else:
+                # Got a response. A non-2xx status may still carry a structured
+                # Prometheus error envelope — parse the body before deciding.
+                try:
+                    parsed = self._parse_body(resp, query)
+                except PrometheusConnectionError as exc:
+                    # Unparseable body (proxy HTML error page, truncated response).
+                    # Transient — fall through to the retry path.
+                    last_exc = exc
+                else:
+                    if not parsed.is_success:
+                        # Definitive rejection from Prometheus itself. Not retried.
+                        raise PrometheusQueryError(
+                            error_type=parsed.error_type or "unknown",
+                            message=parsed.error or "unknown error",
+                            query=query,
+                        )
+                    if resp.is_error:
+                        # HTTP 4xx/5xx but the body claimed success and carried no
+                        # error detail — treat as a transport failure and retry.
+                        last_exc = PrometheusConnectionError(
+                            f"Prometheus returned HTTP {resp.status_code} for {query!r}"
+                        )
+                    else:
+                        return parsed
+
+            if attempt < self._max_retries:
+                log.warning(
+                    "prometheus.request.retry",
+                    query=query,
+                    attempt=attempt + 1,
+                    error=str(last_exc),
+                )
+                if self._retry_backoff:
+                    await asyncio.sleep(self._retry_backoff * (2**attempt))
+
+        assert last_exc is not None
+        raise last_exc
+
+    @staticmethod
+    def _parse_body(resp: httpx.Response, query: str) -> PrometheusResponse:
+        """Parse an HTTP response body into a PrometheusResponse.
+
+        Raises PrometheusConnectionError if the body is not valid Prometheus
+        JSON (e.g. an HTML error page from a reverse proxy).
+        """
+        try:
+            payload = resp.json()
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise PrometheusConnectionError(
+                f"Non-JSON response from Prometheus (HTTP {resp.status_code}) "
+                f"for {query!r}: {exc}"
+            ) from exc
+        try:
+            return PrometheusResponse.model_validate(payload)
+        except ValidationError as exc:
+            raise PrometheusConnectionError(
+                f"Unrecognised Prometheus response shape for {query!r}: {exc}"
+            ) from exc
+
+    # ------------------------------------------------------------------
     # Instant query (vector)
     # ------------------------------------------------------------------
 
@@ -207,27 +318,8 @@ class PrometheusClient:
             params["time"] = at.timestamp()
 
         t0 = time.perf_counter()
-        try:
-            resp = await self._client.get(self._INSTANT_PATH, params=params)
-            resp.raise_for_status()
-        except httpx.TimeoutException as exc:
-            raise PrometheusConnectionError(
-                f"Timeout querying Prometheus ({self._base_url}): {exc}"
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise PrometheusConnectionError(
-                f"HTTP error querying Prometheus: {exc}"
-            ) from exc
-
+        parsed = await self._execute(self._INSTANT_PATH, params, query)
         duration = time.perf_counter() - t0
-        parsed = PrometheusResponse.model_validate(resp.json())
-
-        if not parsed.is_success:
-            raise PrometheusQueryError(
-                error_type=parsed.error_type or "unknown",
-                message=parsed.error or "unknown error",
-                query=query,
-            )
 
         result_count = len(parsed.data.get("result", [])) if parsed.data else 0
         log.debug(
@@ -269,27 +361,8 @@ class PrometheusClient:
         }
 
         t0 = time.perf_counter()
-        try:
-            resp = await self._client.get(self._RANGE_PATH, params=params)
-            resp.raise_for_status()
-        except httpx.TimeoutException as exc:
-            raise PrometheusConnectionError(
-                f"Timeout on range query ({self._base_url}): {exc}"
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise PrometheusConnectionError(
-                f"HTTP error on range query: {exc}"
-            ) from exc
-
+        parsed = await self._execute(self._RANGE_PATH, params, query)
         duration = time.perf_counter() - t0
-        parsed = PrometheusResponse.model_validate(resp.json())
-
-        if not parsed.is_success:
-            raise PrometheusQueryError(
-                error_type=parsed.error_type or "unknown",
-                message=parsed.error or "unknown error",
-                query=query,
-            )
 
         series_count = len(parsed.data.get("result", [])) if parsed.data else 0
         log.debug(
@@ -329,15 +402,42 @@ class PrometheusClient:
         if not vector.result:
             raise EmptyResultError(query=spec.expr)
 
+        if len(vector.result) > 1:
+            # The agent's decision queries are all aggregated to a single series
+            # (sum(...), a scalar carbon gauge, one deployment-scoped kube_* series).
+            # More than one series means the query is under-aggregated or a stale
+            # label-set is lingering (e.g. a pod that was deleted, a changed zone).
+            # collect_agent_observation() would silently pick result[0]; surface it.
+            log.warning(
+                "prometheus.parse.multiple_series",
+                metric=spec.name,
+                query=spec.expr,
+                series_count=len(vector.result),
+                label_sets=[s.metric for s in vector.result][:5],
+            )
+
         snapshots: list[MetricSnapshot] = []
         for sample in vector.result:
             timestamp, value_str = sample.value
             try:
                 value = float(value_str)
-            except ValueError:
+            except (ValueError, TypeError):
                 log.warning(
                     "prometheus.parse.non_numeric",
                     metric=spec.name,
+                    raw_value=value_str,
+                )
+                continue
+
+            if not math.isfinite(value):
+                # NaN is what histogram_quantile() returns when every bucket's
+                # rate is 0 (no traffic in the window); +Inf/-Inf come from
+                # divide-by-zero ratios. None are usable decision inputs — drop
+                # them here so the value never reaches the policy as a real number.
+                log.warning(
+                    "prometheus.parse.non_finite",
+                    metric=spec.name,
+                    query=spec.expr,
                     raw_value=value_str,
                 )
                 continue
@@ -381,9 +481,14 @@ class PrometheusClient:
         """
         Run all agent decision-input queries and return an AgentObservation.
 
-        Queries that fail (empty result, connection error) are logged as
-        warnings and omitted from the result — partial observations are
-        better than a complete failure.
+        Queries that fail (empty result, query error, connection error, or a
+        malformed response) are logged as warnings and omitted from the result —
+        a partial observation is better than a complete failure, and the policy
+        layer decides whether the surviving signals are sufficient to act on.
+
+        Side effect: updates ``greenops_agent_observation_completeness_ratio``
+        and the per-metric Prometheus query error/latency metrics so the
+        ``AgentObservationIncomplete`` alert has data to evaluate.
 
         Args:
             queries:    GreenOpsQueries instance (parameterised for ns/deployment).
@@ -397,10 +502,12 @@ class PrometheusClient:
         collected_snapshots: list[MetricSnapshot] = []
 
         for spec in decision_inputs:
+            q0 = time.perf_counter()
             try:
                 response = await self.instant_query(spec.expr)
                 snapshots = self.parse_vector_to_snapshots(response, spec)
-                # Use the first (or only) sample for scalar metrics
+                # Use the first (or only) sample for scalar metrics.
+                # parse_vector_to_snapshots() logs a warning when >1 series.
                 if snapshots:
                     collected_snapshots.append(snapshots[0])
             except EmptyResultError:
@@ -409,6 +516,9 @@ class PrometheusClient:
                     metric=spec.name,
                     query=spec.expr,
                 )
+                AGENT_PROMETHEUS_QUERY_ERRORS.labels(
+                    metric_name=spec.name, error_type="empty_result"
+                ).inc()
             except PrometheusQueryError as exc:
                 log.warning(
                     "prometheus.collect.query_error",
@@ -416,17 +526,44 @@ class PrometheusClient:
                     error_type=exc.error_type,
                     message=exc.message,
                 )
+                AGENT_PROMETHEUS_QUERY_ERRORS.labels(
+                    metric_name=spec.name, error_type=exc.error_type or "query_error"
+                ).inc()
             except PrometheusConnectionError as exc:
                 log.error(
                     "prometheus.collect.connection_error",
                     metric=spec.name,
                     error=str(exc),
                 )
+                AGENT_PROMETHEUS_QUERY_ERRORS.labels(
+                    metric_name=spec.name, error_type="connection_error"
+                ).inc()
+            except (ValueError, ValidationError) as exc:
+                # as_vector() on a non-vector/absent payload, or a result shape
+                # the models reject. One bad response must not abort the sweep.
+                log.warning(
+                    "prometheus.collect.malformed_response",
+                    metric=spec.name,
+                    query=spec.expr,
+                    error=str(exc),
+                )
+                AGENT_PROMETHEUS_QUERY_ERRORS.labels(
+                    metric_name=spec.name, error_type="malformed_response"
+                ).inc()
+            finally:
+                AGENT_PROMETHEUS_QUERY_DURATION_SECONDS.labels(
+                    metric_name=spec.name
+                ).observe(time.perf_counter() - q0)
+
+        total = len(decision_inputs)
+        completeness = len(collected_snapshots) / total if total else 0.0
+        AGENT_OBSERVATION_COMPLETENESS.set(completeness)
 
         log.info(
             "prometheus.observation_collected",
-            total_queries=len(decision_inputs),
+            total_queries=total,
             collected=len(collected_snapshots),
+            completeness_ratio=round(completeness, 3),
             namespace=namespace,
             deployment=deployment,
         )
