@@ -12,7 +12,7 @@ kind: Kustomization
 
 namespace: greenops
 
-bases:
+resources:
   - ../../base
 
 # ── Image overrides ───────────────────────────────────────────────────────────
@@ -23,8 +23,12 @@ images:
     newTag: 0.1.0
 
 # ── Common labels for this environment ───────────────────────────────────────
-commonLabels:
-  greenops.io/env: prod
+# Kept out of selectors (immutable) — this is an identifying label only.
+labels:
+  - pairs:
+      greenops.io/env: prod
+    includeSelectors: false
+    includeTemplates: true
 
 # ── Patches ──────────────────────────────────────────────────────────────────
 patches:

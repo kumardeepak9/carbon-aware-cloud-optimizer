@@ -10,7 +10,7 @@ kind: Kustomization
 
 namespace: greenops
 
-bases:
+resources:
   - ../../base
 
 # ── Image overrides ───────────────────────────────────────────────────────────
@@ -20,8 +20,12 @@ images:
     newTag: dev
 
 # ── Common labels for this environment ───────────────────────────────────────
-commonLabels:
-  greenops.io/env: dev
+# Kept out of selectors (immutable) — this is an identifying label only.
+labels:
+  - pairs:
+      greenops.io/env: dev
+    includeSelectors: false
+    includeTemplates: true
 
 # ── Patches ──────────────────────────────────────────────────────────────────
 patches:
@@ -60,3 +64,12 @@ patches:
       - op: replace
         path: /data/LOG_FORMAT
         value: "pretty"
+
+  # 4. Image pull policy — dev uses the mutable :dev tag, so always re-pull.
+  - target:
+      kind: Deployment
+      name: greenops-demo-workload
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always

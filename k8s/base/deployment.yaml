@@ -48,6 +48,9 @@ spec:
         prometheus.io/port: "8080"
 
     spec:
+      # ── Least privilege — the workload calls no Kubernetes API ──────────────
+      automountServiceAccountToken: false
+
       # ── Security context (pod level) ────────────────────────────────────────
       securityContext:
         runAsNonRoot: true
@@ -74,6 +77,9 @@ spec:
         - name: workload
           # Image is overridden per overlay; the tag is updated by CI.
           image: greenops-demo-workload:0.1.0
+          # Pinned, immutable version tags — no need to re-pull if cached.
+          # The dev overlay patches this to Always for its mutable :dev tag.
+          imagePullPolicy: IfNotPresent
 
           ports:
             - name: http
@@ -149,6 +155,9 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 1001
+            runAsGroup: 1001
+            seccompProfile:
+              type: RuntimeDefault
             capabilities:
               drop:
                 - ALL

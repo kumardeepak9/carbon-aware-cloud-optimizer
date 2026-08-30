@@ -15,7 +15,13 @@ resources:
   - deployment.yaml
   - service.yaml
 
-# Common labels applied to every resource in this base
-commonLabels:
-  app.kubernetes.io/managed-by: kustomize
-  app.kubernetes.io/part-of: greenops
+# Common labels applied to every resource in this base.
+# includeSelectors:false keeps these OUT of Deployment/Service selectors —
+# selectors are immutable after creation, so only the stable
+# app.kubernetes.io/name label (declared explicitly on each resource) is matched.
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: greenops
+    includeSelectors: false
+    includeTemplates: true
