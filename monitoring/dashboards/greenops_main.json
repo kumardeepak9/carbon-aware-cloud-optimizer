@@ -19,7 +19,7 @@
         "name": "⚡ Scale Events",
         "step": "60s",
         "titleFormat": "Scale Event",
-        "textFormat": "Replicas changed — carbon was {{carbon_intensity}} gCO₂/kWh"
+        "textFormat": "Deployment replica count changed."
       }
     ]
   },
@@ -503,7 +503,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "kube_deployment_status_replicas_ready{namespace=\"$namespace\",deployment=\"$deployment\"} / kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "expr": "(kube_deployment_status_replicas_ready{namespace=\"$namespace\",deployment=\"$deployment\"} / kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"}) unless kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"} == 0",
           "legendFormat": "availability",
           "refId": "A"
         }
@@ -625,22 +625,22 @@
       "id": 19,
       "type": "timeseries",
       "title": "HTTP Request Rate (req/s)",
-      "description": "Total request rate across all workload pods. Sudden drops after scale-down indicate under-provisioning.",
+      "description": "Application request rate across all workload pods, excluding Prometheus scrapes. Sudden drops after scale-down indicate under-provisioning.",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\"}[2m]))",
+          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",endpoint!=\"/metrics\"}[2m]))",
           "legendFormat": "Total req/s",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",status_code=~\"2..\"}[2m]))",
+          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",endpoint!=\"/metrics\",status_code=~\"2..\"}[2m]))",
           "legendFormat": "2xx req/s",
           "refId": "B"
         },
         {
-          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",status_code=~\"5..\"}[2m]))",
+          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",endpoint!=\"/metrics\",status_code=~\"5..\"}[2m]))",
           "legendFormat": "5xx req/s",
           "refId": "C"
         }
@@ -671,17 +671,17 @@
       "id": 20,
       "type": "timeseries",
       "title": "HTTP Response Latency (P99 & P50)",
-      "description": "P99 > 1s blocks agent scale-down. P50 is the typical user experience. Watch for latency spikes after replica reduction.",
+      "description": "P99/P50 application latency in seconds, excluding Prometheus scrapes. P99 > 1s blocks agent scale-down.",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(greenops_demo_http_request_duration_seconds_bucket{namespace=\"$namespace\"}[2m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(greenops_demo_http_request_duration_seconds_bucket{namespace=\"$namespace\",endpoint!=\"/metrics\"}[2m])) by (le))",
           "legendFormat": "P99 Latency",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.50, sum(rate(greenops_demo_http_request_duration_seconds_bucket{namespace=\"$namespace\"}[2m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(greenops_demo_http_request_duration_seconds_bucket{namespace=\"$namespace\",endpoint!=\"/metrics\"}[2m])) by (le))",
           "legendFormat": "P50 Latency",
           "refId": "B"
         }
@@ -728,7 +728,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",status_code=~\"5..\"}[2m])) / sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\"}[2m]))",
+          "expr": "(sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",endpoint!=\"/metrics\",status_code=~\"5..\"}[2m])) / sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",endpoint!=\"/metrics\"}[2m]))) unless sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",endpoint!=\"/metrics\"}[2m])) == 0",
           "legendFormat": "Error Ratio (5xx / total)",
           "refId": "A"
         }
@@ -777,12 +777,12 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$deployment\"}[2m]))",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$container\"}[2m]))",
           "legendFormat": "CPU Used (cores)",
           "refId": "A"
         },
         {
-          "expr": "sum(kube_pod_container_resource_requests{namespace=\"$namespace\",pod=~\"$deployment-.*\",resource=\"cpu\"})",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$container\",resource=\"cpu\"})",
           "legendFormat": "CPU Requested (cores)",
           "refId": "B"
         }
@@ -794,7 +794,7 @@
       "fieldConfig": {
         "defaults": {
           "custom": { "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" },
-          "unit": "short"
+          "unit": "cores"
         },
         "overrides": [
           {
@@ -817,17 +817,17 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$deployment\"})",
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$container\"})",
           "legendFormat": "Memory Used",
           "refId": "A"
         },
         {
-          "expr": "sum(kube_pod_container_resource_requests{namespace=\"$namespace\",pod=~\"$deployment-.*\",resource=\"memory\"})",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$container\",resource=\"memory\"})",
           "legendFormat": "Memory Requested",
           "refId": "B"
         },
         {
-          "expr": "sum(kube_pod_container_resource_limits{namespace=\"$namespace\",pod=~\"$deployment-.*\",resource=\"memory\"})",
+          "expr": "sum(kube_pod_container_resource_limits{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$container\",resource=\"memory\"})",
           "legendFormat": "Memory Limit",
           "refId": "C"
         }
@@ -986,6 +986,16 @@
         "name": "deployment",
         "options": [{ "selected": true, "text": "greenops-demo-workload", "value": "greenops-demo-workload" }],
         "query": "greenops-demo-workload",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": { "selected": false, "text": "workload", "value": "workload" },
+        "hide": 0,
+        "label": "Container",
+        "name": "container",
+        "options": [{ "selected": true, "text": "workload", "value": "workload" }],
+        "query": "workload",
         "skipUrlSync": false,
         "type": "custom"
       },

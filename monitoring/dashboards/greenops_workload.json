@@ -1,89 +1,167 @@
 {
-  "__comment": "Grafana dashboard — GreenOps Workload Overview. Replace this stub with a full exported JSON from Grafana UI or generate via grafonnet.",
+  "__comment": "Grafana dashboard — GreenOps Workload Overview. Uses only metrics emitted by this project or explicitly scraped by monitoring/prometheus.yml.",
   "title": "GreenOps — Workload Overview",
   "uid": "greenops-workload-overview",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "tags": ["greenops", "workload", "kubernetes"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Data Source",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": { "selected": false, "text": "greenops", "value": "greenops" },
+        "hide": 0,
+        "label": "Namespace",
+        "name": "namespace",
+        "options": [{ "selected": true, "text": "greenops", "value": "greenops" }],
+        "query": "greenops",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": { "selected": false, "text": "greenops-demo-workload", "value": "greenops-demo-workload" },
+        "hide": 0,
+        "label": "Deployment",
+        "name": "deployment",
+        "options": [{ "selected": true, "text": "greenops-demo-workload", "value": "greenops-demo-workload" }],
+        "query": "greenops-demo-workload",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": { "selected": false, "text": "workload", "value": "workload" },
+        "hide": 0,
+        "label": "Container",
+        "name": "container",
+        "options": [{ "selected": true, "text": "workload", "value": "workload" }],
+        "query": "workload",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "Ready Replicas",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "kube_deployment_status_replicas_ready{namespace=\"greenops\",deployment=\"greenops-demo-workload\"}",
-          "legendFormat": "Ready"
+          "expr": "kube_deployment_status_replicas_ready{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "legendFormat": "Ready",
+          "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] }
     },
     {
       "id": 2,
       "type": "stat",
       "title": "Desired Replicas",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "kube_deployment_spec_replicas{namespace=\"greenops\",deployment=\"greenops-demo-workload\"}",
-          "legendFormat": "Desired"
+          "expr": "kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "legendFormat": "Desired",
+          "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] }
     },
     {
       "id": 3,
       "type": "timeseries",
       "title": "CPU Usage (cores)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "greenops:workload:cpu_usage_cores",
-          "legendFormat": "CPU cores"
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$container\"}[2m]))",
+          "legendFormat": "CPU cores",
+          "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": { "defaults": { "unit": "cores" }, "overrides": [] }
     },
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Memory Usage (bytes)",
+      "title": "Memory Usage",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "greenops:workload:memory_usage_bytes",
-          "legendFormat": "Memory bytes"
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\",pod=~\"$deployment-.*\",container=\"$container\"})",
+          "legendFormat": "Memory used",
+          "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": { "defaults": { "unit": "decbytes" }, "overrides": [] }
     },
     {
       "id": 5,
       "type": "timeseries",
-      "title": "HTTP Request Rate (rps)",
+      "title": "HTTP Request Rate (req/s)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "greenops:workload:http_request_rate_rps",
-          "legendFormat": "rps"
+          "expr": "sum(rate(greenops_demo_http_requests_total{namespace=\"$namespace\",endpoint!=\"/metrics\"}[2m]))",
+          "legendFormat": "Requests",
+          "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
     },
     {
       "id": 6,
       "type": "timeseries",
       "title": "HTTP P99 Latency",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "greenops:workload:http_p99_latency_seconds",
-          "legendFormat": "P99"
+          "expr": "histogram_quantile(0.99, sum(rate(greenops_demo_http_request_duration_seconds_bucket{namespace=\"$namespace\",endpoint!=\"/metrics\"}[2m])) by (le))",
+          "legendFormat": "P99",
+          "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
     },
     {
       "id": 7,
       "type": "timeseries",
       "title": "Availability Ratio",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "greenops:workload:availability_ratio",
-          "legendFormat": "availability"
+          "expr": "(kube_deployment_status_replicas_ready{namespace=\"$namespace\",deployment=\"$deployment\"} / kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"}) unless kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"} == 0",
+          "legendFormat": "availability",
+          "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      }
     }
   ]
 }

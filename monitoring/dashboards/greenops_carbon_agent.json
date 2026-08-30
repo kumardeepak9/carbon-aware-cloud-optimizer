@@ -1,82 +1,141 @@
 {
-  "__comment": "Grafana dashboard — GreenOps Carbon Overview. Shows carbon intensity alongside replica count to visualize agent decisions.",
-  "title": "GreenOps — Carbon & Agent Overview",
+  "__comment": "Grafana dashboard — GreenOps Carbon Overview. Shows Electricity Maps carbon conditions alongside Kubernetes replica state using metrics scraped by this repository.",
+  "title": "GreenOps — Carbon & Replica Overview",
   "uid": "greenops-carbon-agent",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
-  "time": { "from": "now-6h", "to": "now" },
-  "tags": ["greenops", "carbon", "agent"],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "tags": ["greenops", "carbon", "kubernetes"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Data Source",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": { "selected": false, "text": "greenops", "value": "greenops" },
+        "hide": 0,
+        "label": "Namespace",
+        "name": "namespace",
+        "options": [{ "selected": true, "text": "greenops", "value": "greenops" }],
+        "query": "greenops",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": { "selected": false, "text": "greenops-demo-workload", "value": "greenops-demo-workload" },
+        "hide": 0,
+        "label": "Deployment",
+        "name": "deployment",
+        "options": [{ "selected": true, "text": "greenops-demo-workload", "value": "greenops-demo-workload" }],
+        "query": "greenops-demo-workload",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": { "selected": false, "text": "DE", "value": "DE" },
+        "hide": 0,
+        "label": "Grid Zone",
+        "name": "zone",
+        "options": [{ "selected": true, "text": "DE", "value": "DE" }],
+        "query": "DE",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "Current Carbon Intensity (gCO2eq/kWh)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "greenops_carbon_intensity_gco2_per_kwh{zone=\"$zone\"}",
+          "legendFormat": "gCO2eq/kWh",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
+          "unit": "none",
+          "decimals": 0,
           "thresholds": {
+            "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
               { "color": "yellow", "value": 100 },
               { "color": "red", "value": 250 }
             ]
           }
-        }
-      },
-      "targets": [
-        {
-          "expr": "greenops_carbon_intensity_gco2_per_kwh",
-          "legendFormat": "gCO2eq/kWh"
-        }
-      ]
+        },
+        "overrides": []
+      }
     },
     {
       "id": 2,
       "type": "timeseries",
       "title": "Carbon Intensity vs Replica Count",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "greenops_carbon_intensity_gco2_per_kwh",
-          "legendFormat": "Carbon Intensity (gCO2eq/kWh)"
+          "expr": "greenops_carbon_intensity_gco2_per_kwh{zone=\"$zone\"}",
+          "legendFormat": "Carbon Intensity (gCO2eq/kWh)",
+          "refId": "A"
         },
         {
-          "expr": "kube_deployment_spec_replicas{namespace=\"greenops\",deployment=\"greenops-demo-workload\"} * 50",
-          "legendFormat": "Replicas × 50 (scaled)"
+          "expr": "kube_deployment_spec_replicas{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "legendFormat": "Desired Replicas",
+          "refId": "B"
+        },
+        {
+          "expr": "kube_deployment_status_replicas_ready{namespace=\"$namespace\",deployment=\"$deployment\"}",
+          "legendFormat": "Ready Replicas",
+          "refId": "C"
         }
       ]
     },
     {
       "id": 3,
       "type": "stat",
-      "title": "Agent Observation Completeness",
+      "title": "Carbon Data Available",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "greenops_agent_observation_completeness_ratio",
-          "legendFormat": "completeness"
+          "expr": "greenops_carbon_data_available{zone=\"$zone\"}",
+          "legendFormat": "available",
+          "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] }
     },
     {
       "id": 4,
-      "type": "timeseries",
-      "title": "Agent Decisions",
-      "targets": [
-        {
-          "expr": "increase(greenops_agent_decisions_total[1h])",
-          "legendFormat": "{{ action }}"
-        }
-      ]
-    },
-    {
-      "id": 5,
       "type": "stat",
-      "title": "GitOps Commits (24h)",
+      "title": "Carbon Data Age",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "increase(greenops_agent_gitops_commits_total{status=\"success\"}[24h])",
-          "legendFormat": "commits"
+          "expr": "time() - greenops_carbon_last_update_timestamp_seconds{zone=\"$zone\"}",
+          "legendFormat": "age",
+          "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
     }
   ]
 }
