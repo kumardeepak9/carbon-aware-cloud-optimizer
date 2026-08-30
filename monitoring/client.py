@@ -124,6 +124,7 @@ class PrometheusClient:
         timeout_seconds: float = 10.0,
         max_retries: int = 2,
         retry_backoff_seconds: float = 0.2,
+        max_sample_age_seconds: float | None = 300.0,
     ) -> None:
         """
         Initialise the Prometheus client.
@@ -135,11 +136,15 @@ class PrometheusClient:
                                    errors. Query errors and empty results are never
                                    retried. 0 disables retrying.
             retry_backoff_seconds: Base delay between retries (doubled each attempt).
+            max_sample_age_seconds: Drop Prometheus samples older than this age before
+                                    passing them to the decision policy. None disables
+                                    sample-age filtering.
         """
         self._base_url = base_url.rstrip("/")
         self._timeout = httpx.Timeout(timeout_seconds)
         self._max_retries = max(0, max_retries)
         self._retry_backoff = max(0.0, retry_backoff_seconds)
+        self._max_sample_age_seconds = max_sample_age_seconds
         self._http: httpx.AsyncClient | None = None
 
     # ------------------------------------------------------------------
@@ -160,7 +165,7 @@ class PrometheusClient:
             await self._http.aclose()
             self._http = None
 
-    async def __aenter__(self) -> "PrometheusClient":
+    async def __aenter__(self) -> PrometheusClient:
         await self.open()
         return self
 
@@ -382,6 +387,9 @@ class PrometheusClient:
     def parse_vector_to_snapshots(
         response: PrometheusResponse,
         spec: QuerySpec,
+        *,
+        max_sample_age_seconds: float | None = None,
+        now: float | None = None,
     ) -> list[MetricSnapshot]:
         """
         Convert a vector (instant query) response into MetricSnapshot objects.
@@ -398,6 +406,7 @@ class PrometheusClient:
             ValueError:       If the response is not a vector.
         """
         vector: VectorData = response.as_vector()
+        current_time = time.time() if now is None else now
 
         if not vector.result:
             raise EmptyResultError(query=spec.expr)
@@ -419,6 +428,18 @@ class PrometheusClient:
         snapshots: list[MetricSnapshot] = []
         for sample in vector.result:
             timestamp, value_str = sample.value
+            if (
+                max_sample_age_seconds is not None
+                and current_time - timestamp > max_sample_age_seconds
+            ):
+                log.warning(
+                    "prometheus.parse.stale_sample",
+                    metric=spec.name,
+                    query=spec.expr,
+                    sample_age_seconds=round(current_time - timestamp, 3),
+                    max_sample_age_seconds=max_sample_age_seconds,
+                )
+                continue
             try:
                 value = float(value_str)
             except (ValueError, TypeError):
@@ -505,7 +526,11 @@ class PrometheusClient:
             q0 = time.perf_counter()
             try:
                 response = await self.instant_query(spec.expr)
-                snapshots = self.parse_vector_to_snapshots(response, spec)
+                snapshots = self.parse_vector_to_snapshots(
+                    response,
+                    spec,
+                    max_sample_age_seconds=self._max_sample_age_seconds,
+                )
                 # Use the first (or only) sample for scalar metrics.
                 # parse_vector_to_snapshots() logs a warning when >1 series.
                 if snapshots:

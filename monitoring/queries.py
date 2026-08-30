@@ -131,6 +131,7 @@ class GreenOpsQueries:
                 f'sum(kube_pod_container_resource_requests{{'
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
+                f'container="{self._container}",'
                 f'resource="cpu"'
                 f"}})"
             ),
@@ -170,6 +171,7 @@ class GreenOpsQueries:
                 f'sum(kube_pod_container_resource_requests{{'
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
+                f'container="{self._container}",'
                 f'resource="memory"'
                 f"}})"
             ),

@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import time
 
-from agent.models import Action
+import pytest
+from pydantic import ValidationError
+
+from agent.models import Action, DecisionRecommendation
 from agent.policy import DecisionPolicy
 from monitoring.models import AgentObservation, MetricSnapshot
 
 
-def _observation(**overrides: float) -> AgentObservation:
+def _observation(**overrides: float | None) -> AgentObservation:
     values = {
         "carbon_intensity_gco2_kwh": 320.0,
         "carbon_data_available": 1.0,
@@ -36,6 +39,7 @@ def _observation(**overrides: float) -> AgentObservation:
             labels={"zone": "DE"} if name.startswith("carbon_") or name.endswith("percentage") else {},
         )
         for name, value in values.items()
+        if value is not None
     ]
     return AgentObservation(snapshots=snapshots, collected_at=time.time())
 
@@ -58,6 +62,15 @@ def test_high_load_high_carbon_recommends_scale_up_for_reliability() -> None:
     assert decision.metadata.decision_basis == "high_operational_load"
 
 
+def test_low_load_low_carbon_recommends_keep() -> None:
+    decision = DecisionPolicy().recommend(_observation(carbon_intensity_gco2_kwh=80.0))
+
+    assert decision.action is Action.KEEP
+    assert decision.current_replicas == 3
+    assert decision.recommended_replicas == 3
+    assert decision.metadata.decision_basis == "steady_state"
+
+
 def test_unhealthy_application_recommends_scale_up_even_when_carbon_is_high() -> None:
     decision = DecisionPolicy().recommend(_observation(replica_count_ready=2.0, pod_availability_ratio=2 / 3))
 
@@ -66,7 +79,7 @@ def test_unhealthy_application_recommends_scale_up_even_when_carbon_is_high() ->
     assert decision.metadata.decision_basis == "reliability_priority"
 
 
-def test_missing_data_defers_without_a_replica_target() -> None:
+def test_missing_carbon_data_defers_without_a_replica_target() -> None:
     observation = _observation()
     observation.snapshots = [
         snapshot for snapshot in observation.snapshots if snapshot.name != "carbon_intensity_gco2_kwh"
@@ -78,3 +91,56 @@ def test_missing_data_defers_without_a_replica_target() -> None:
     assert decision.recommended_replicas is None
     assert "carbon_intensity_gco2_kwh" in decision.metadata.missing_signals
     assert decision.metadata.confidence == 0.0
+
+
+def test_missing_prometheus_data_defers_without_a_replica_target() -> None:
+    decision = DecisionPolicy().recommend(_observation(cpu_request_ratio=None))
+
+    assert decision.action is Action.DEFER
+    assert decision.recommended_replicas is None
+    assert "cpu_request_ratio" in decision.metadata.missing_signals
+
+
+def test_stale_metrics_defer_without_a_replica_target() -> None:
+    decision = DecisionPolicy().recommend(
+        _observation(carbon_last_update_timestamp_seconds=100.0),
+        now=1_000.0,
+    )
+
+    assert decision.action is Action.DEFER
+    assert decision.recommended_replicas is None
+    assert "fresh_carbon_data" in decision.metadata.missing_signals
+
+
+def test_every_decision_contains_required_context() -> None:
+    decision = DecisionPolicy().recommend(_observation(), now=1_000.0)
+    dumped = decision.model_dump()
+
+    assert dumped["action"] == Action.SCALE_DOWN
+    assert dumped["current_replicas"] == 3
+    assert dumped["recommended_replicas"] == 2
+    assert dumped["reason"]
+    assert dumped["environmental_context"]["carbon_intensity_gco2_kwh"] == 320.0
+    assert dumped["operational_context"]["cpu_request_ratio"] == 0.25
+
+
+@pytest.mark.parametrize("bad_action", ["DELETE_CLUSTER", "PATCH_DEPLOYMENT", ""])
+def test_malformed_structured_output_rejects_unsupported_actions(bad_action: str) -> None:
+    good = DecisionPolicy().recommend(_observation(), now=1_000.0).model_dump()
+    good["action"] = bad_action
+
+    with pytest.raises(ValidationError):
+        DecisionRecommendation.model_validate(good)
+
+
+def test_malformed_scale_output_without_target_is_rejected() -> None:
+    good = DecisionPolicy().recommend(_observation(), now=1_000.0).model_dump()
+    good["recommended_replicas"] = None
+
+    with pytest.raises(ValidationError):
+        DecisionRecommendation.model_validate(good)
+
+
+def test_invalid_operational_metric_value_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        DecisionPolicy().recommend(_observation(pod_availability_ratio=1.5), now=1_000.0)

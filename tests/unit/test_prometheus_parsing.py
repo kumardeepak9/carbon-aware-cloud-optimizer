@@ -258,6 +258,9 @@ class TestQueryCorrectness:
     def test_container_label_is_configurable(self) -> None:
         qs = GreenOpsQueries(container="app")
         assert 'container="app"' in qs.cpu_utilization().expr
+        assert 'container="app"' in qs.cpu_request_ratio().expr
+        assert 'container="app"' in qs.memory_utilization_bytes().expr
+        assert 'container="app"' in qs.memory_request_ratio().expr
 
     def test_error_and_request_rate_coerce_empty_to_zero(self) -> None:
         qs = GreenOpsQueries()

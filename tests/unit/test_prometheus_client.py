@@ -13,9 +13,7 @@ Strategy
 
 from __future__ import annotations
 
-import json
 import time
-from datetime import datetime, timezone
 
 import pytest
 import respx
@@ -222,6 +220,34 @@ class TestParseVectorToSnapshots:
 
         assert len(snapshots) == 1
         assert snapshots[0].labels.get("pod") == "pod-b"
+
+    def test_stale_sample_is_skipped_when_max_age_is_set(self) -> None:
+        payload = _vector_response({"namespace": "greenops"}, 1.0, timestamp=100.0)
+        response = PrometheusResponse.model_validate(payload)
+        spec = self._make_spec()
+
+        snapshots = PrometheusClient.parse_vector_to_snapshots(
+            response,
+            spec,
+            max_sample_age_seconds=300.0,
+            now=1_000.0,
+        )
+
+        assert snapshots == []
+
+    def test_stale_sample_is_kept_when_max_age_is_disabled(self) -> None:
+        payload = _vector_response({"namespace": "greenops"}, 1.0, timestamp=100.0)
+        response = PrometheusResponse.model_validate(payload)
+        spec = self._make_spec()
+
+        snapshots = PrometheusClient.parse_vector_to_snapshots(
+            response,
+            spec,
+            max_sample_age_seconds=None,
+            now=1_000.0,
+        )
+
+        assert len(snapshots) == 1
 
 
 # ---------------------------------------------------------------------------
