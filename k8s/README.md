@@ -7,17 +7,21 @@ All Kubernetes resources for the Carbon-Aware Cloud Optimizer, structured as a *
 ```
 k8s/
 ├── base/                        # Environment-agnostic resources
-│   ├── namespace.yaml           # greenops namespace
+│   ├── namespace.yaml           # namespace (renamed per overlay)
 │   ├── configmap.yaml           # Non-secret runtime config
 │   ├── deployment.yaml          # Demo workload Deployment
 │   ├── service.yaml             # ClusterIP Service
 │   └── kustomization.yaml
 └── overlays/
-    ├── dev/                     # Dev: 1 replica, debug logging, local image
+    ├── dev/                     # Dev: 1 replica, debug logging — namespace greenops-dev
     │   └── kustomization.yaml
-    └── prod/                    # Prod: 3 replicas, full resources, GHCR image
+    └── prod/                    # Prod: 3 replicas, full resources — namespace greenops
         └── kustomization.yaml
 ```
+
+> dev and prod deploy to **different namespaces** (`greenops-dev` / `greenops`) so
+> their Argo CD Applications never contend for the same objects on one cluster.
+> The monitoring stack and the agent's default config target `greenops` (prod).
 
 ## Apply
 

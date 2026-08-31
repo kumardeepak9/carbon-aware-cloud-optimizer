@@ -91,19 +91,17 @@ class ElectricityMapsSettings(BaseSettings):
 
 
 class KubernetesSettings(BaseSettings):
-    """Settings for Kubernetes API access."""
+    """Kubernetes context for read-only observation.
 
-    in_cluster: bool = Field(
-        default=False,
-        description="Set to true when running inside a Kubernetes pod.",
-    )
-    kubeconfig_path: str = Field(
-        default="~/.kube/config",
-        description="Ignored when in_cluster=true.",
-    )
+    GreenOps has NO Kubernetes API client and never writes to a cluster — the
+    only path to Kubernetes is Git -> Argo CD. This block therefore holds just
+    the namespace used to scope Prometheus queries; there is deliberately no
+    kubeconfig / in-cluster credential field.
+    """
+
     namespace: str = Field(
         default="greenops",
-        description="Default namespace for workload operations.",
+        description="Namespace used to scope Prometheus queries for the workload.",
     )
 
     model_config = SettingsConfigDict(

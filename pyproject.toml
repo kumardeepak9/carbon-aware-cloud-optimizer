@@ -22,8 +22,9 @@ dependencies = [
     # Prometheus metrics
     "prometheus-client>=0.20",
 
-    # Kubernetes SDK
-    "kubernetes>=29.0",
+    # NOTE: no Kubernetes client library. GreenOps never talks to the
+    # Kubernetes API — the only write path is Git -> Argo CD. Keeping the SDK
+    # out of the dependency set makes that boundary structural, not just policy.
 
     # Structured logging
     "structlog>=24.1",
@@ -48,6 +49,7 @@ dev = [
     "pytest-cov>=5.0",
     "httpx",                   # also used as async test client
     "respx>=0.21",             # mock httpx requests in tests
+    "pyyaml>=6.0",             # parse k8s / Argo CD manifests in path-validation tests
     "mypy>=1.10",
     "ruff>=0.4",
     "pre-commit>=3.7",

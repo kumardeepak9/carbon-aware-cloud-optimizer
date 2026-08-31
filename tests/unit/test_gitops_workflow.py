@@ -80,6 +80,8 @@ def _repo(tmp_path: Path) -> Path:
     manifest.parent.mkdir(parents=True)
     manifest.write_text(KUSTOMIZATION, encoding="utf-8")
     _git(repo, "init")
+    # Pin the branch name — the host's init.defaultBranch may be "main".
+    _git(repo, "branch", "-M", "master")
     _git(repo, "config", "user.email", "greenops@example.test")
     _git(repo, "config", "user.name", "GreenOps Bot")
     _git(repo, "add", "--", ".")

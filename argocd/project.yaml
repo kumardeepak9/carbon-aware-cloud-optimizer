@@ -25,11 +25,14 @@ spec:
     - https://github.com/kumardeepak9/carbon-aware-cloud-optimizer.git
 
   # ── Destination clusters and namespaces ─────────────────────────────────────
-  # Only allow deployment into the greenops namespace on the in-cluster server.
-  # Explicitly forbids deployment to kube-system, argocd, or any other namespace.
+  # Only the in-cluster server, and only the two GreenOps workload namespaces
+  # (prod -> greenops, dev -> greenops-dev). Everything else — kube-system,
+  # argocd, default, … — is denied.
   destinations:
     - server: https://kubernetes.default.svc
       namespace: greenops
+    - server: https://kubernetes.default.svc
+      namespace: greenops-dev
 
   # ── Cluster resource access ──────────────────────────────────────────────────
   # Allow only Namespace at the cluster level (so Argo CD can create/manage it).

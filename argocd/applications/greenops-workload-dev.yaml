@@ -31,9 +31,10 @@ spec:
       {}
 
   # ── Destination ───────────────────────────────────────────────────────────
+  # Dev deploys to its own namespace; the dev overlay sets the same value.
   destination:
     server: https://kubernetes.default.svc
-    namespace: greenops
+    namespace: greenops-dev
 
   # ── Sync policy ───────────────────────────────────────────────────────────
   # IMPORTANT: automated sync is DISABLED by default.

@@ -20,10 +20,14 @@ spec:
   source:
     repoURL: https://github.com/kumardeepak9/carbon-aware-cloud-optimizer.git
     targetRevision: main
-    path: argocd            # watches the entire argocd/ directory in this repo
+    path: argocd
     directory:
-      recurse: true         # includes argocd/applications/*.yaml and argocd/project.yaml
-      exclude: "*.template.yaml"  # exclude secret templates from sync
+      recurse: true
+      # Manage ONLY the AppProject and the workload Applications. This must not
+      # pick up argocd/install/kustomization.yaml (kind: Kustomization is not a
+      # cluster resource), argocd/app-of-apps.yaml (self-management + prune is
+      # unsafe) or the repo-secret template.
+      include: "{project.yaml,applications/*.yaml}"
 
   destination:
     server: https://kubernetes.default.svc
