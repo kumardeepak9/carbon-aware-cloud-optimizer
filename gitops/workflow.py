@@ -8,7 +8,13 @@ import re
 import subprocess
 from pathlib import Path
 
-from agent.models import Action, ValidatedRecommendation, ValidationStatus
+from agent.models import (
+    Action,
+    DecisionRecommendation,
+    ValidatedRecommendation,
+    ValidationStatus,
+)
+from agent.safety import OptimizationSafetyPolicy
 from config import get_logger
 from gitops.github import GitHubClient
 from gitops.manifest import update_kustomize_replica_patch
@@ -24,6 +30,7 @@ class GitOpsChangeWorkflow:
         self,
         settings: GitOpsSettings | None = None,
         github: GitHubClient | None = None,
+        safety_policy: OptimizationSafetyPolicy | None = None,
     ) -> None:
         self.settings = settings or GitOpsSettings()
         self.github = github or GitHubClient(
@@ -32,6 +39,11 @@ class GitOpsChangeWorkflow:
             token=self.settings.github_token,
             create_pull_request=self.settings.create_pull_request,
         )
+        # The workflow re-runs deterministic policy validation itself rather than
+        # trusting the PolicyValidation object attached to the incoming
+        # ValidatedRecommendation. Pass the same policy the upstream controller
+        # used so the thresholds match; the default is the baseline policy.
+        self.safety_policy = safety_policy or OptimizationSafetyPolicy()
 
     async def prepare_change(
         self,
@@ -96,6 +108,23 @@ class GitOpsChangeWorkflow:
                 "Repository has uncommitted changes; refusing to mix GreenOps changes with "
                 f"existing work: {', '.join(dirty_files)}",
                 audit,
+            )
+
+        # ── Independent policy re-validation at the boundary ────────────────
+        # Do not trust the PolicyValidation attached upstream. Re-run the
+        # deterministic safety policy here, using the replica count that is
+        # actually in the manifest as ground truth for `current_replicas`
+        # (the recommendation's own value may be stale or forged, which would
+        # make the max-scale-down-percentage guard miscalculate).
+        manifest_replicas = update_kustomize_replica_patch(
+            manifest.read_text(encoding="utf-8"),
+            deployment_name=self.settings.deployment_name,
+            replicas=recommendation.recommended_replicas,
+        ).previous_replicas
+        revalidation_block = self._revalidate(recommendation, manifest_replicas)
+        if revalidation_block is not None:
+            return self._blocked(
+                revalidation_block, audit, manifest_path=relative_manifest
             )
 
         branch_name = self._branch_name(validated)
@@ -239,6 +268,63 @@ class GitOpsChangeWorkflow:
     def _assert_allowed_manifest(relative_manifest: str) -> None:
         if not relative_manifest.startswith("k8s/"):
             raise ValueError("GitOps workflow may only modify files under k8s/.")
+
+    def _revalidate(
+        self,
+        recommendation: DecisionRecommendation,
+        manifest_replicas: int,
+    ) -> str | None:
+        """Re-run deterministic safety validation. Returns a block reason or None.
+
+        ``manifest_replicas`` is the replica count currently written in the
+        desired-state manifest — the authoritative ``current_replicas`` for this
+        change, regardless of what the recommendation claims.
+        """
+        meta = recommendation.metadata
+        target = recommendation.recommended_replicas
+        if target is None:
+            return "Re-validation failed: recommendation has no replica target."
+
+        # Direction must agree with the real delta, not just the action label.
+        if recommendation.action is Action.SCALE_DOWN and target >= manifest_replicas:
+            return (
+                f"Re-validation failed: SCALE_DOWN to {target} does not reduce the "
+                f"manifest's {manifest_replicas} replicas."
+            )
+        if recommendation.action is Action.SCALE_UP and target <= manifest_replicas:
+            return (
+                f"Re-validation failed: SCALE_UP to {target} does not raise the "
+                f"manifest's {manifest_replicas} replicas."
+            )
+
+        # Emergency restorations are produced and policy-validated by
+        # OptimizationVerifier against a deliberately relaxed config (the whole
+        # point is to act while the workload is unhealthy and carbon data may be
+        # old). Re-running the standard policy here would always block them.
+        # The direction/bounds checks above still apply.
+        is_emergency_rollback = (
+            meta.decision_basis == "emergency-rollback"
+            and meta.policy_version.startswith("phase-10-rollback")
+        )
+        if is_emergency_rollback:
+            cfg = self.safety_policy.config
+            if not (cfg.min_replicas <= target <= cfg.max_replicas):
+                return (
+                    f"Re-validation failed: emergency restoration target {target} is "
+                    f"outside [{cfg.min_replicas}, {cfg.max_replicas}]."
+                )
+            return None
+
+        grounded = recommendation.model_copy(update={"current_replicas": manifest_replicas})
+        verdict = self.safety_policy.validate(grounded)
+        if verdict.status is not ValidationStatus.APPROVED:
+            return (
+                f"Re-validation against manifest state was not APPROVED "
+                f"({verdict.status.value}): {verdict.reason}"
+            )
+        if not verdict.approved_for_gitops_change:
+            return "Re-validation approved for observation only, not a GitOps change."
+        return None
 
     def _dirty_files(self, repo: Path) -> list[str]:
         output = self._git(repo, "status", "--porcelain").stdout

@@ -132,6 +132,29 @@ class DecisionRecommendation(BaseModel):
                 raise ValueError("scale decisions must include recommended replicas")
             if self.recommended_replicas == self.current_replicas:
                 raise ValueError("scale decisions must change replica count")
+            # The action label and the replica delta must agree. The safety
+            # policy applies its scale-down guards (CPU, latency, health, error
+            # rate, restarts, max scale-down %) by inspecting the action; a
+            # recommendation that shrinks the workload while labelled SCALE_UP
+            # would skip every one of them. Reject the contradiction here so no
+            # such recommendation can be constructed or deserialised.
+            if self.current_replicas is not None:
+                if (
+                    self.action is Action.SCALE_UP
+                    and self.recommended_replicas < self.current_replicas
+                ):
+                    raise ValueError(
+                        "SCALE_UP must not decrease replicas "
+                        f"({self.current_replicas} -> {self.recommended_replicas})"
+                    )
+                if (
+                    self.action is Action.SCALE_DOWN
+                    and self.recommended_replicas > self.current_replicas
+                ):
+                    raise ValueError(
+                        "SCALE_DOWN must not increase replicas "
+                        f"({self.current_replicas} -> {self.recommended_replicas})"
+                    )
         return self
 
 

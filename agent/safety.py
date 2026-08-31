@@ -28,6 +28,14 @@ class OptimizationSafetyConfig:
     max_scale_down_percentage: float = 0.50
     cooldown_seconds: float = 900.0
     max_carbon_data_age_seconds: float = 600.0
+    # A scale-down must be backed by workload-health evidence. When every health
+    # signal below is absent, the recommendation is rejected rather than assumed
+    # safe (absence of evidence is not evidence of safety).
+    require_health_evidence_for_scale_down: bool = True
+    # Recommendations below this confidence are never auto-approved; they fall
+    # through to REQUIRE_REVIEW. DecisionPolicy emits 0.95 for a real decision
+    # and 0.0 only when it is already deferring.
+    min_confidence_for_auto_approval: float = 0.5
 
 
 class OptimizationSafetyPolicy:
@@ -63,12 +71,27 @@ class OptimizationSafetyPolicy:
             evaluated_at_seconds=evaluated_at,
         )
 
+    @staticmethod
+    def _is_effective_scale_down(recommendation: DecisionRecommendation) -> bool:
+        """True when the recommendation actually reduces replica count.
+
+        The safety guards must key off the real replica delta, not only the
+        ``action`` label — a mislabelled recommendation must not be able to
+        skip them.
+        """
+        current = recommendation.current_replicas
+        target = recommendation.recommended_replicas
+        if current is None or target is None:
+            return recommendation.action is Action.SCALE_DOWN
+        return target < current or recommendation.action is Action.SCALE_DOWN
+
     def _hard_rejections(
         self, recommendation: DecisionRecommendation, evaluated_at: float
     ) -> list[str]:
         reasons: list[str] = []
         ctx = recommendation.operational_context
         env = recommendation.environmental_context
+        scale_down = self._is_effective_scale_down(recommendation)
 
         if recommendation.metadata.missing_signals:
             reasons.append(
@@ -102,7 +125,12 @@ class OptimizationSafetyPolicy:
                     f"recommended replicas {target} exceeds maximum {self.config.max_replicas}"
                 )
 
-        if recommendation.action is Action.SCALE_DOWN:
+        if scale_down:
+            if self._scale_down_lacks_health_evidence(ctx):
+                reasons.append(
+                    "cannot verify workload health for a scale-down: no readiness, "
+                    "availability, error-rate, latency or restart signal is present"
+                )
             if (
                 ctx.cpu_request_ratio is not None
                 and ctx.cpu_request_ratio >= self.config.cpu_safety_threshold
@@ -122,6 +150,20 @@ class OptimizationSafetyPolicy:
 
         return reasons
 
+    def _scale_down_lacks_health_evidence(self, ctx: OperationalContext) -> bool:
+        """True when a scale-down would proceed with zero workload-health data."""
+        if not self.config.require_health_evidence_for_scale_down:
+            return False
+        has_readiness = ctx.ready_replicas is not None and ctx.current_replicas is not None
+        signals = (
+            has_readiness,
+            ctx.availability_ratio is not None,
+            ctx.error_rate_rps is not None,
+            ctx.p99_latency_seconds is not None,
+            ctx.restart_rate is not None,
+        )
+        return not any(signals)
+
     def _review_conditions(
         self,
         recommendation: DecisionRecommendation,
@@ -130,6 +172,12 @@ class OptimizationSafetyPolicy:
     ) -> list[str]:
         reasons: list[str] = []
         ctx = recommendation.operational_context
+
+        if recommendation.metadata.confidence < self.config.min_confidence_for_auto_approval:
+            reasons.append(
+                f"recommendation confidence {recommendation.metadata.confidence:.2f} is "
+                f"below the auto-approval minimum {self.config.min_confidence_for_auto_approval:.2f}"
+            )
 
         if recommendation.action in {Action.SCALE_DOWN, Action.SCALE_UP}:
             if last_optimization_timestamp_seconds is not None:
@@ -140,7 +188,7 @@ class OptimizationSafetyPolicy:
                         f"({elapsed:.0f}s < {self.config.cooldown_seconds:.0f}s)"
                     )
 
-        if recommendation.action is Action.SCALE_DOWN:
+        if self._is_effective_scale_down(recommendation):
             current = recommendation.current_replicas
             target = recommendation.recommended_replicas
             if current and target is not None and target < current:

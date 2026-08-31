@@ -91,6 +91,10 @@ class ClosedLoopController:
             safety_policy=self._safety_policy,
         )
         self._gitops = gitops_workflow
+        if self._gitops is not None:
+            # Ensure the workflow's independent boundary re-validation uses the
+            # same thresholds this controller was configured with.
+            self._gitops.safety_policy = self._safety_policy
         self._verifier = OptimizationVerifier(
             config=verification_config or VerificationConfig(),
             gitops_workflow=gitops_workflow,

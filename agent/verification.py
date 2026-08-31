@@ -650,6 +650,8 @@ class OptimizationVerifier:
             max_scale_down_percentage=1.0,       # allow full restoration
             cooldown_seconds=0.0,               # waived for emergency
             max_carbon_data_age_seconds=3600.0,  # relaxed; carbon data may be old
+            require_health_evidence_for_scale_down=False,  # degraded telemetry must not block a rollback
+            min_confidence_for_auto_approval=0.0,          # deterministic rollback, not a heuristic
         )
         rollback_validation = OptimizationSafetyPolicy(emergency_config).validate(
             rollback_rec,
