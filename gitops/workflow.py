@@ -56,12 +56,12 @@ class GitOpsChangeWorkflow:
         except (OSError, ValueError, subprocess.CalledProcessError) as exc:
             log.error(
                 "gitops_change_failed",
-                error=str(exc),
+                error=self._safe_error(exc),
                 **audit,
             )
             return self._result(
                 GitOpsChangeStatus.FAILED,
-                f"GitOps change preparation failed safely: {exc}",
+                f"GitOps change preparation failed safely: {self._safe_error(exc)}",
                 audit,
             )
 
@@ -154,6 +154,16 @@ class GitOpsChangeWorkflow:
             replicas=recommendation.recommended_replicas,
         )
         if not patch_update.changed:
+            branch_diff_files = self._committed_files_since_base(repo)
+            if branch_already_exists and branch_diff_files != [relative_manifest]:
+                return self._blocked(
+                    "GitOps branch contains committed changes outside the allowed manifest: "
+                    + ", ".join(branch_diff_files),
+                    audit,
+                    branch_name=branch_name,
+                    changed_files=branch_diff_files,
+                    manifest_path=relative_manifest,
+                )
             status = GitOpsChangeStatus.PREPARED if branch_already_exists else GitOpsChangeStatus.NO_OP
             reason = (
                 "Dedicated GitOps branch already contains the recommended replica count."
@@ -189,8 +199,42 @@ class GitOpsChangeWorkflow:
         self._git(repo, "add", "--", relative_manifest)
         self._git(repo, "commit", "-m", commit_message)
         commit_sha = self._git(repo, "rev-parse", "HEAD").stdout.strip()
+        branch_diff_files = self._committed_files_since_base(repo)
+        if branch_diff_files and branch_diff_files != [relative_manifest]:
+            return self._blocked(
+                "GitOps branch contains committed changes outside the allowed manifest: "
+                + ", ".join(branch_diff_files),
+                audit,
+                branch_name=branch_name,
+                changed_files=branch_diff_files,
+                manifest_path=relative_manifest,
+            )
         pr_title = self._pull_request_title(validated)
         pr_body = self._pull_request_body(validated, relative_manifest, commit_sha)
+        if self._github_creates_pull_requests():
+            try:
+                self._push_branch(repo, branch_name)
+            except subprocess.CalledProcessError as exc:
+                error = self._safe_error(exc)
+                log.warning(
+                    "gitops_push_failed",
+                    branch_name=branch_name,
+                    commit_sha=commit_sha,
+                    manifest_path=relative_manifest,
+                    error=error,
+                    **audit,
+                )
+                return self._result(
+                    GitOpsChangeStatus.PR_FAILED,
+                    f"GitOps commit prepared, but branch push failed: {error}",
+                    audit,
+                    branch_name=branch_name,
+                    commit_sha=commit_sha,
+                    changed_files=changed_files,
+                    manifest_path=relative_manifest,
+                    pull_request_title=pr_title,
+                    pull_request_body=pr_body,
+                )
         pr_result = await self.github.create_or_prepare_pull_request(
             title=pr_title,
             body=pr_body,
@@ -204,12 +248,12 @@ class GitOpsChangeWorkflow:
                 branch_name=branch_name,
                 commit_sha=commit_sha,
                 manifest_path=relative_manifest,
-                github_error=pr_result.error,
+                github_error=self._safe_text(pr_result.error),
                 **audit,
             )
             return self._result(
                 GitOpsChangeStatus.PR_FAILED,
-                f"GitOps commit prepared, but pull request creation failed: {pr_result.error}",
+                f"GitOps commit prepared, but pull request creation failed: {self._safe_text(pr_result.error)}",
                 audit,
                 branch_name=branch_name,
                 commit_sha=commit_sha,
@@ -334,6 +378,17 @@ class GitOpsChangeWorkflow:
         output = self._git(repo, "diff", "--name-only").stdout
         return sorted(line for line in output.splitlines() if line)
 
+    def _committed_files_since_base(self, repo: Path) -> list[str]:
+        try:
+            base = self._git(repo, "merge-base", self.settings.base_branch, "HEAD").stdout.strip()
+        except subprocess.CalledProcessError:
+            base = self.settings.base_branch
+        try:
+            output = self._git(repo, "diff", "--name-only", f"{base}..HEAD").stdout
+        except subprocess.CalledProcessError:
+            return []
+        return sorted(line for line in output.splitlines() if line)
+
     def _checkout_branch(self, repo: Path, branch_name: str) -> None:
         if self._branch_exists(repo, branch_name):
             self._git(repo, "switch", branch_name)
@@ -357,6 +412,36 @@ class GitOpsChangeWorkflow:
             check=True,
             capture_output=True,
             text=True,
+        )
+
+    def _push_branch(self, repo: Path, branch_name: str) -> None:
+        self._git(repo, "push", "-u", "origin", branch_name)
+
+    def _github_creates_pull_requests(self) -> bool:
+        return bool(getattr(self.github, "creates_pull_requests", False))
+
+    def _safe_error(self, exc: BaseException) -> str:
+        if isinstance(exc, subprocess.CalledProcessError):
+            parts = [str(exc), exc.stdout or "", exc.stderr or ""]
+            message = "\n".join(part for part in parts if part)
+        else:
+            message = str(exc)
+        return self._safe_text(message)
+
+    def _safe_text(self, message: str | None) -> str:
+        if not message:
+            return ""
+        token = (
+            self.settings.github_token.get_secret_value()
+            if self.settings.github_token is not None
+            else None
+        )
+        if token:
+            message = message.replace(token, "[redacted]")
+        return re.sub(
+            r"https://[^/@\s]+@github\.com",
+            "https://[redacted]@github.com",
+            message,
         )
 
     def _branch_name(self, validated: ValidatedRecommendation) -> str:

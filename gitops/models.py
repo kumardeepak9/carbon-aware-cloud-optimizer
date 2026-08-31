@@ -6,7 +6,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from config.settings import GitOpsSettings
+from config.settings import GitOpsSettings as GitOpsSettings
 
 
 class GitOpsChangeStatus(StrEnum):
