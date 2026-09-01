@@ -20,14 +20,12 @@ The controller never modifies Kubernetes directly.
 
 from __future__ import annotations
 
-import asyncio
 import time
-from typing import Any, Awaitable, Callable
+from typing import Any
 
-from agent.lifecycle import AuditEvent, LifecycleStage, OptimizationLifecycle
+from agent.lifecycle import LifecycleStage, OptimizationLifecycle
 from agent.models import (
     Action,
-    DecisionRecommendation,
     ValidatedRecommendation,
     ValidationStatus,
 )
@@ -422,6 +420,9 @@ class ClosedLoopController:
         )
         lifecycle.rollback_pr_url = (
             result.rollback_result.get("pr_url") if result.rollback_result else None
+        )
+        lifecycle.rollback_commit_sha = (
+            result.rollback_result.get("commit_sha") if result.rollback_result else None
         )
         return result
 

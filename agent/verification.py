@@ -32,18 +32,17 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from agent.lifecycle import AuditEvent, LifecycleStage, OptimizationLifecycle
+from agent.lifecycle import LifecycleStage, OptimizationLifecycle
 from agent.models import (
     Action,
     DecisionMetadata,
     DecisionRecommendation,
-    EnvironmentalContext,
     OperationalContext,
     ValidatedRecommendation,
     ValidationStatus,
@@ -105,7 +104,7 @@ class WorkloadSnapshot(BaseModel):
         return self.model_dump(mode="json")
 
     @classmethod
-    def from_observation_map(cls, obs: dict[str, float]) -> "WorkloadSnapshot":
+    def from_observation_map(cls, obs: dict[str, float]) -> WorkloadSnapshot:
         """Build a snapshot from a flat metric-name → value mapping."""
         return cls(
             replica_count_desired=obs.get("replica_count_desired"),
@@ -137,7 +136,7 @@ class MetricDelta:
     delta_pct: float | None  # (after - before) / before, None if before is 0 or missing
 
     @classmethod
-    def compute(cls, name: str, before: float | None, after: float | None) -> "MetricDelta":
+    def compute(cls, name: str, before: float | None, after: float | None) -> MetricDelta:
         delta: float | None = None
         delta_pct: float | None = None
         if before is not None and after is not None:
@@ -231,6 +230,12 @@ class VerificationConfig:
     min_required_metrics: int = 4
     """Minimum number of post-change metrics required to avoid INCONCLUSIVE."""
 
+    require_complete_post_change_metrics: bool = True
+    """Require the full CPU/memory/latency/traffic/health/replica metric set."""
+
+    require_deployment_convergence: bool = True
+    """Require observed Kubernetes replicas to match the GitOps target."""
+
 
 # ---------------------------------------------------------------------------
 # Verification result
@@ -279,6 +284,18 @@ class OptimizationVerifier:
     so the verifier is fully testable without a real Prometheus instance.
     """
 
+    _REQUIRED_POST_CHANGE_FIELDS = (
+        "replica_count_desired",
+        "replica_count_ready",
+        "availability_ratio",
+        "cpu_request_ratio",
+        "memory_request_ratio",
+        "http_request_rate_rps",
+        "http_error_rate_rps",
+        "http_p99_latency_seconds",
+        "pod_restart_rate",
+    )
+
     def __init__(
         self,
         config: VerificationConfig | None = None,
@@ -291,7 +308,7 @@ class OptimizationVerifier:
         self,
         *,
         pre_snapshot: WorkloadSnapshot,
-        metric_collector: "MetricCollectorFn",
+        metric_collector: MetricCollectorFn,
         validated: ValidatedRecommendation,
         lifecycle: OptimizationLifecycle,
         sleep: bool = True,
@@ -360,20 +377,68 @@ class OptimizationVerifier:
         post_snapshot = WorkloadSnapshot.from_observation_map(obs)
         available = sum(
             1
-            for f in [
-                "replica_count_desired", "replica_count_ready", "availability_ratio",
-                "cpu_request_ratio", "http_error_rate_rps", "http_p99_latency_seconds",
-            ]
+            for f in self._REQUIRED_POST_CHANGE_FIELDS
             if getattr(post_snapshot, f, None) is not None
         )
+        missing_required = [
+            f for f in self._REQUIRED_POST_CHANGE_FIELDS
+            if getattr(post_snapshot, f, None) is None
+        ]
 
         lifecycle.emit(
             LifecycleStage.VERIFICATION,
             "verification.metrics_collected",
-            {"available_metric_count": available, "post_replicas": post_snapshot.replica_count_desired},
+            {
+                "available_metric_count": available,
+                "missing_required_metrics": missing_required,
+                "post_replicas": post_snapshot.replica_count_desired,
+            },
         )
 
         # ── Insufficient data ────────────────────────────────────────────
+        if self.config.require_complete_post_change_metrics and missing_required:
+            log.warning(
+                "verification.inconclusive",
+                missing_required_metrics=missing_required,
+                lifecycle_id=lifecycle.lifecycle_id,
+            )
+            return VerificationResult(
+                outcome=VerificationOutcome.INCONCLUSIVE,
+                reason=(
+                    "Post-change Prometheus data is missing required verification "
+                    "metrics: " + ", ".join(missing_required) + "."
+                ),
+                pre_snapshot=pre_snapshot,
+                post_snapshot=post_snapshot,
+                stabilization_waited_seconds=round(waited, 1),
+                available_metric_count=available,
+            )
+
+        deployment_gap = (
+            self._deployment_convergence_gap(post_snapshot, validated)
+            if self.config.require_deployment_convergence
+            else None
+        )
+        if deployment_gap is not None:
+            log.warning(
+                "verification.inconclusive",
+                reason=deployment_gap,
+                lifecycle_id=lifecycle.lifecycle_id,
+            )
+            lifecycle.emit(
+                LifecycleStage.VERIFICATION,
+                "verification.deployment_not_converged",
+                {"reason": deployment_gap},
+            )
+            return VerificationResult(
+                outcome=VerificationOutcome.INCONCLUSIVE,
+                reason=deployment_gap,
+                pre_snapshot=pre_snapshot,
+                post_snapshot=post_snapshot,
+                stabilization_waited_seconds=round(waited, 1),
+                available_metric_count=available,
+            )
+
         if available < self.config.min_required_metrics:
             log.warning(
                 "verification.inconclusive",
@@ -479,6 +544,32 @@ class OptimizationVerifier:
             lifecycle_id=lifecycle.lifecycle_id,
         )
         return result
+
+    def _deployment_convergence_gap(
+        self,
+        post: WorkloadSnapshot,
+        validated: ValidatedRecommendation,
+    ) -> str | None:
+        target = validated.recommendation.recommended_replicas
+        if target is None:
+            return None
+        desired = post.replica_count_desired
+        ready = post.replica_count_ready
+        if desired is None:
+            return "Post-change replica count is unavailable; Argo CD/Kubernetes convergence cannot be verified."
+        if int(round(desired)) != target:
+            return (
+                "Post-change desired replicas have not converged to the GitOps target "
+                f"({desired:g} observed, {target} expected)."
+            )
+        if ready is None:
+            return "Post-change ready replica count is unavailable; workload readiness cannot be verified."
+        if int(round(ready)) != int(round(desired)):
+            return (
+                "Post-change ready replicas have not converged to desired replicas "
+                f"({ready:g} ready, {desired:g} desired)."
+            )
+        return None
 
     # -----------------------------------------------------------------------
     # Hard violation checks (→ ROLLBACK_REQUIRED)
@@ -624,6 +715,8 @@ class OptimizationVerifier:
                 ready_replicas=int(result.post_snapshot.replica_count_ready or 0),
                 availability_ratio=result.post_snapshot.availability_ratio,
                 cpu_request_ratio=result.post_snapshot.cpu_request_ratio,
+                memory_request_ratio=result.post_snapshot.memory_request_ratio,
+                request_rate_rps=result.post_snapshot.http_request_rate_rps,
                 error_rate_rps=result.post_snapshot.http_error_rate_rps,
                 p99_latency_seconds=result.post_snapshot.http_p99_latency_seconds,
                 restart_rate=result.post_snapshot.pod_restart_rate,
@@ -726,6 +819,7 @@ class OptimizationVerifier:
                 "rollback_result": {
                     "status": rollback_gitops.status,
                     "branch": rollback_gitops.branch_name,
+                    "commit_sha": rollback_gitops.commit_sha,
                     "pr_url": rollback_gitops.pull_request_url,
                     "reason": rollback_gitops.reason,
                 },

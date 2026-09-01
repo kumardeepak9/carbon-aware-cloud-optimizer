@@ -26,7 +26,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Stage enum
 # ---------------------------------------------------------------------------
@@ -80,7 +79,7 @@ class AuditEvent(BaseModel):
         stage: LifecycleStage,
         event_type: str,
         data: dict[str, Any] | None = None,
-    ) -> "AuditEvent":
+    ) -> AuditEvent:
         """Convenience constructor that stamps the current time."""
         return cls(
             lifecycle_id=lifecycle_id,
@@ -149,6 +148,7 @@ class OptimizationLifecycle(BaseModel):
     rollback_gitops_status: str | None = None
     rollback_branch: str | None = None
     rollback_pr_url: str | None = None
+    rollback_commit_sha: str | None = None
 
     # Append-only audit trail
     audit_events: list[AuditEvent] = Field(default_factory=list)

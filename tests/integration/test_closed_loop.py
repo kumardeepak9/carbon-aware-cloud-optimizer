@@ -23,12 +23,11 @@ TestClosedLoopController      : full end-to-end lifecycle with mock dependencies
 from __future__ import annotations
 
 import time
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent.lifecycle import AuditEvent, LifecycleStage, OptimizationLifecycle
+from agent.lifecycle import LifecycleStage, OptimizationLifecycle
 from agent.models import (
     Action,
     DecisionMetadata,
@@ -48,7 +47,6 @@ from agent.verification import (
     compute_deltas,
 )
 from gitops.models import GitOpsChangeResult, GitOpsChangeStatus
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -612,6 +610,8 @@ class TestOptimizationVerifierInconclusive:
         config = VerificationConfig(
             stabilization_period_seconds=0.0,
             min_required_metrics=2,  # relaxed
+            require_complete_post_change_metrics=False,
+            require_deployment_convergence=False,
         )
         verifier = OptimizationVerifier(config=config)
         lifecycle = make_lifecycle()
@@ -791,6 +791,8 @@ class TestClosedLoopController:
             "replica_count_ready": 2.0,
             "pod_availability_ratio": 1.0,
             "cpu_request_ratio": 0.40,
+            "memory_request_ratio": 0.45,
+            "http_request_rate_rps": 1.0,
             "http_error_rate_rps": 0.0,
             "http_p99_latency_seconds": 0.12,
             "pod_restart_rate": 0.0,
@@ -798,6 +800,7 @@ class TestClosedLoopController:
         post_metrics = {
             **pre_metrics,
             "replica_count_desired": 1.0,
+            "replica_count_ready": 1.0,
             "http_error_rate_rps": 0.15,   # violation
             "http_p99_latency_seconds": 1.8,  # violation
         }
