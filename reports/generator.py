@@ -15,7 +15,7 @@ The generator never fabricates values. If data is unavailable:
 Estimation chain (only when measured inputs are available)
 ----------------------------------------------------------
 1. replica_hours_saved  = Σ (original_replicas - reduced_replicas) × duration_hours
-                          [measured: replica counts from lifecycle snapshots]
+                          [calculated: replica counts and duration from lifecycle snapshots]
 2. cpu_hours_saved      = replica_hours_saved × cpu_per_replica
                           [estimated: uses ReportEstimationConfig.default_cpu_per_replica_cores]
 3. kwh_saved            = cpu_hours_saved × watts_per_core / 1000
@@ -28,9 +28,8 @@ Estimation chain (only when measured inputs are available)
 
 from __future__ import annotations
 
-import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from agent.lifecycle import OptimizationLifecycle
@@ -40,6 +39,7 @@ from reports.models import (
     OptimizationEventRecord,
     ReportEstimationConfig,
     ReportValue,
+    ValueProvenance,
     WeeklyGreenOpsReport,
     WorkloadUtilizationSummary,
 )
@@ -98,7 +98,7 @@ class WeeklyReportGenerator:
 
         report = WeeklyGreenOpsReport(
             report_id=str(uuid.uuid4()),
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
             period_start=period_start.isoformat(),
             period_end=period_end.isoformat(),
             region=self._region,
@@ -135,7 +135,10 @@ class WeeklyReportGenerator:
             reason=rec.get("reason", ""),
             decision_basis=metadata.get("decision_basis", ""),
             confidence=metadata.get("confidence"),
-            pre_replicas=_int_or_none(rec.get("current_replicas")),
+            pre_replicas=_first_int(
+                pre.get("replica_count_desired"),
+                rec.get("current_replicas"),
+            ),
             post_replicas=_int_or_none(post.get("replica_count_desired")),
             recommended_replicas=_int_or_none(rec.get("recommended_replicas")),
             policy_status=val.get("status", ""),
@@ -149,6 +152,10 @@ class WeeklyReportGenerator:
             safety_violations=lc.safety_thresholds_violated,
             pre_cpu_ratio=pre.get("cpu_request_ratio"),
             post_cpu_ratio=post.get("cpu_request_ratio"),
+            pre_memory_ratio=pre.get("memory_request_ratio"),
+            post_memory_ratio=post.get("memory_request_ratio"),
+            pre_request_rate=pre.get("http_request_rate_rps"),
+            post_request_rate=post.get("http_request_rate_rps"),
             pre_p99_latency=pre.get("http_p99_latency_seconds"),
             post_p99_latency=post.get("http_p99_latency_seconds"),
             pre_availability=pre.get("availability_ratio"),
@@ -170,11 +177,23 @@ class WeeklyReportGenerator:
         has_data = any(c.get(k) is not None for k in [
             "avg_intensity", "min_intensity", "max_intensity",
         ])
-        if not has_data:
+        required = {
+            "avg_intensity": "average carbon intensity",
+            "min_intensity": "minimum carbon intensity",
+            "max_intensity": "maximum carbon intensity",
+            "avg_renewable_pct": "average renewable percentage",
+            "avg_fossil_pct": "average fossil percentage",
+            "data_availability_pct": "carbon data availability percentage",
+        }
+        missing = [label for key, label in required.items() if c.get(key) is None]
+        if missing:
             notes.append(
-                "Carbon intensity time-series data not provided. "
-                "Carbon trend section contains no measured values."
+                "Carbon intensity trend data missing: "
+                + ", ".join(missing)
+                + ". Missing values are reported as unavailable."
             )
+        if not has_data:
+            notes.append("Carbon trend section contains no measured values.")
 
         return CarbonTrendSummary(
             avg_intensity_gco2_kwh=ReportValue(
@@ -213,11 +232,24 @@ class WeeklyReportGenerator:
         has_data = any(w.get(k) is not None for k in [
             "avg_cpu_ratio", "avg_memory_ratio", "avg_replicas",
         ])
-        if not has_data:
+        required = {
+            "avg_cpu_ratio": "average CPU request ratio",
+            "avg_memory_ratio": "average memory request ratio",
+            "avg_replicas": "average replica count",
+            "avg_request_rate": "average request rate",
+            "avg_p99_latency": "average P99 latency",
+            "total_errors": "total HTTP errors",
+            "avg_availability": "average availability ratio",
+        }
+        missing = [label for key, label in required.items() if w.get(key) is None]
+        if missing:
             notes.append(
-                "Workload utilization time-series data not provided. "
-                "Utilization section contains no measured values."
+                "Workload utilization data missing: "
+                + ", ".join(missing)
+                + ". Missing values are reported as unavailable."
             )
+        if not has_data:
+            notes.append("Utilization section contains no measured values.")
 
         return WorkloadUtilizationSummary(
             avg_cpu_request_ratio=ReportValue(
@@ -296,12 +328,12 @@ class WeeklyReportGenerator:
         """
         cfg = self._config
 
-        # Step 1: replica·hours saved (measured from lifecycle durations)
+        # Step 1: replica·hours saved (calculated from lifecycle state)
         total_replica_hours = 0.0
         has_replica_data = False
 
         for event in events:
-            if not event.was_applied:
+            if not event.was_applied or event.final_outcome != "SUCCESS" or event.had_rollback:
                 continue
             delta = event.replica_delta
             if delta is None or delta >= 0:
@@ -317,16 +349,20 @@ class WeeklyReportGenerator:
 
         if not has_replica_data:
             notes.append(
-                "No successful scale-down events with measured replica counts "
-                "and durations were found. Impact estimates are unavailable."
+                "No verified successful scale-down events with observed pre/post "
+                "replica counts and durations were found. Impact estimates are unavailable."
             )
             return ImpactEstimates()
 
         replica_hours_val = ReportValue(
             round(total_replica_hours, 4),
-            measured=True,
+            measured=False,
             unit="replica·hours",
-            note="Sum of (Δreplicas × lifecycle_duration_hours) for scale-down events.",
+            note=(
+                "Calculated as Σ(abs(post_replicas - pre_replicas) × "
+                "lifecycle_duration_hours) for verified successful scale-down events."
+            ),
+            provenance=ValueProvenance.CALCULATED,
         )
 
         # Step 2: estimated CPU·hours saved
@@ -336,6 +372,7 @@ class WeeklyReportGenerator:
             measured=False,
             unit="CPU·hours",
             note=f"replica_hours × {cfg.default_cpu_per_replica_cores} cores/replica (estimated).",
+            provenance=ValueProvenance.ESTIMATED,
         )
 
         # Step 3: estimated kWh saved
@@ -345,6 +382,7 @@ class WeeklyReportGenerator:
             measured=False,
             unit="kWh",
             note=f"cpu_hours × {cfg.watts_per_cpu_core}W / 1000 (estimated).",
+            provenance=ValueProvenance.ESTIMATED,
         )
 
         # Step 4: estimated CO2 grams avoided (requires measured carbon intensity)
@@ -359,10 +397,16 @@ class WeeklyReportGenerator:
                     f"kwh_saved × {avg_carbon:.1f} gCO2eq/kWh (avg measured intensity). "
                     "The intensity is measured; the product is estimated."
                 ),
+                provenance=ValueProvenance.ESTIMATED,
             )
         else:
-            co2_val = ReportValue(None, False, "gCO2eq",
-                                  note="Unavailable: avg carbon intensity not provided.")
+            co2_val = ReportValue(
+                None,
+                False,
+                "gCO2eq",
+                note="Unavailable: avg carbon intensity not provided.",
+                provenance=ValueProvenance.UNAVAILABLE,
+            )
             notes.append(
                 "Estimated CO2 avoided is unavailable because average carbon "
                 "intensity was not provided for the reporting period."
@@ -379,6 +423,7 @@ class WeeklyReportGenerator:
                 "Based on generic on-demand pricing; actual savings depend on "
                 "pricing model, reserved instances, and spot usage."
             ),
+            provenance=ValueProvenance.ESTIMATED,
         )
 
         return ImpactEstimates(
@@ -403,3 +448,12 @@ def _int_or_none(v: Any) -> int | None:
         return int(v)
     except (ValueError, TypeError):
         return None
+
+
+def _first_int(*values: Any) -> int | None:
+    """Return the first value that can be safely converted to int."""
+    for value in values:
+        parsed = _int_or_none(value)
+        if parsed is not None:
+            return parsed
+    return None

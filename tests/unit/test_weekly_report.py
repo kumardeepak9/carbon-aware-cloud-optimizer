@@ -21,28 +21,26 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from agent.lifecycle import LifecycleStage, OptimizationLifecycle
 from reports.generator import WeeklyReportGenerator
 from reports.models import (
-    ImpactEstimates,
     OptimizationEventRecord,
     ReportEstimationConfig,
     ReportValue,
-    WeeklyGreenOpsReport,
+    ValueProvenance,
 )
 from reports.renderer import render_markdown
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
-PERIOD_START = datetime(2026, 8, 18, 0, 0, 0, tzinfo=timezone.utc)
-PERIOD_END = datetime(2026, 8, 25, 0, 0, 0, tzinfo=timezone.utc)
+PERIOD_START = datetime(2026, 8, 18, 0, 0, 0, tzinfo=UTC)
+PERIOD_END = datetime(2026, 8, 25, 0, 0, 0, tzinfo=UTC)
 
 
 def make_lifecycle(
@@ -58,6 +56,10 @@ def make_lifecycle(
     carbon_intensity: float = 310.0,
     pre_cpu: float = 0.40,
     post_cpu: float = 0.55,
+    pre_memory: float = 0.45,
+    post_memory: float = 0.60,
+    pre_request_rate: float = 1.0,
+    post_request_rate: float = 0.9,
     pre_p99: float = 0.12,
     post_p99: float = 0.18,
     rollback: bool = False,
@@ -98,6 +100,8 @@ def make_lifecycle(
     lc.verification_reason = "All thresholds satisfied."
     lc.pre_snapshot_json = {
         "cpu_request_ratio": pre_cpu,
+        "memory_request_ratio": pre_memory,
+        "http_request_rate_rps": pre_request_rate,
         "http_p99_latency_seconds": pre_p99,
         "availability_ratio": 1.0,
         "replica_count_desired": float(current_replicas),
@@ -105,6 +109,8 @@ def make_lifecycle(
     }
     lc.post_snapshot_json = {
         "cpu_request_ratio": post_cpu,
+        "memory_request_ratio": post_memory,
+        "http_request_rate_rps": post_request_rate,
         "http_p99_latency_seconds": post_p99,
         "availability_ratio": 1.0,
         "replica_count_desired": float(recommended_replicas),
@@ -165,11 +171,23 @@ class TestReportValue:
     def test_estimated_value(self):
         rv = ReportValue(1.5, measured=False, unit="kWh", note="derived")
         assert rv.measured is False
+        assert rv.provenance is ValueProvenance.ESTIMATED
         assert rv.note == "derived"
+
+    def test_calculated_value(self):
+        rv = ReportValue(
+            8.0,
+            measured=False,
+            unit="replica·hours",
+            provenance=ValueProvenance.CALCULATED,
+        )
+        assert rv.measured is False
+        assert rv.provenance is ValueProvenance.CALCULATED
 
     def test_unavailable_value(self):
         rv = ReportValue(None, measured=False)
         assert rv.available is False
+        assert rv.provenance is ValueProvenance.UNAVAILABLE
 
     def test_to_dict(self):
         rv = ReportValue(3.14159, measured=True, unit="ratio")
@@ -177,6 +195,7 @@ class TestReportValue:
         assert d["value"] == 3.1416  # rounded to 4 dp
         assert d["measured"] is True
         assert d["unit"] == "ratio"
+        assert d["provenance"] == "measured"
 
     def test_to_dict_none(self):
         rv = ReportValue(None, measured=False)
@@ -331,6 +350,10 @@ class TestWeeklyReportGeneratorComplete:
         ev = report.optimization_events[0]
         assert ev.pre_cpu_ratio == 0.40
         assert ev.post_cpu_ratio == 0.55
+        assert ev.pre_memory_ratio == 0.45
+        assert ev.post_memory_ratio == 0.60
+        assert ev.pre_request_rate == 1.0
+        assert ev.post_request_rate == 0.9
         assert ev.pre_p99_latency == 0.12
         assert ev.post_p99_latency == 0.18
 
@@ -348,11 +371,13 @@ class TestWeeklyReportGeneratorComplete:
         ie = report.impact_estimates
         # replica_hours_saved = (3 - 1) × 4h = 8.0 replica·hours
         assert ie.total_replica_hours_saved.available
-        assert ie.total_replica_hours_saved.measured is True
+        assert ie.total_replica_hours_saved.measured is False
+        assert ie.total_replica_hours_saved.provenance is ValueProvenance.CALCULATED
         assert ie.total_replica_hours_saved.value == pytest.approx(8.0, rel=0.01)
 
         # cpu_hours = 8.0 × 0.2 = 1.6
         assert ie.estimated_cpu_hours_saved.measured is False
+        assert ie.estimated_cpu_hours_saved.provenance is ValueProvenance.ESTIMATED
         assert ie.estimated_cpu_hours_saved.value == pytest.approx(1.6, rel=0.01)
 
         # kwh = 1.6 × 10 / 1000 = 0.016
@@ -361,6 +386,7 @@ class TestWeeklyReportGeneratorComplete:
         # CO2 = 0.016 × 215.0 = 3.44 gCO2
         assert ie.estimated_co2_grams_avoided.available
         assert ie.estimated_co2_grams_avoided.measured is False
+        assert ie.estimated_co2_grams_avoided.provenance is ValueProvenance.ESTIMATED
         assert ie.estimated_co2_grams_avoided.value == pytest.approx(3.44, rel=0.05)
 
         # Cost = 1.6 × 0.035 = 0.056
@@ -379,6 +405,32 @@ class TestWeeklyReportGeneratorComplete:
         ev = report.optimization_events[0]
         assert ev.had_rollback is True
         assert ev.rollback_branch == "greenops/rollback"
+
+    def test_rollback_event_does_not_claim_savings(self, full_carbon_summary):
+        lc = make_lifecycle(
+            final_outcome="ROLLBACK_PREPARED",
+            verification_outcome="ROLLBACK_REQUIRED",
+            rollback=True,
+        )
+        gen = WeeklyReportGenerator(lifecycles=[lc], carbon_summary=full_carbon_summary)
+        report = gen.generate(period_start=PERIOD_START, period_end=PERIOD_END)
+
+        ie = report.impact_estimates
+        assert ie.total_replica_hours_saved.available is False
+        assert ie.estimated_cpu_hours_saved.available is False
+        assert ie.estimated_kwh_saved.available is False
+        assert ie.estimated_co2_grams_avoided.available is False
+        assert ie.estimated_cost_saved_usd.available is False
+
+    def test_degraded_event_does_not_claim_verified_savings(self, full_carbon_summary):
+        lc = make_lifecycle(
+            final_outcome="DEGRADED",
+            verification_outcome="DEGRADED",
+        )
+        gen = WeeklyReportGenerator(lifecycles=[lc], carbon_summary=full_carbon_summary)
+        report = gen.generate(period_start=PERIOD_START, period_end=PERIOD_END)
+
+        assert report.impact_estimates.total_replica_hours_saved.available is False
 
     def test_report_to_dict_serializable(self, full_carbon_summary, full_workload_summary):
         lc = make_lifecycle()
@@ -436,6 +488,21 @@ class TestWeeklyReportGeneratorPartial:
         assert ie.estimated_co2_grams_avoided.available is False
         assert any("CO2" in n for n in report.data_quality_notes)
 
+    def test_partial_reporting_period_keeps_only_observed_values_available(self):
+        gen = WeeklyReportGenerator(
+            lifecycles=[],
+            carbon_summary={"avg_intensity": 200.0},
+            workload_summary={"avg_cpu_ratio": 0.40, "avg_replicas": 2.0},
+        )
+        report = gen.generate(period_start=PERIOD_START, period_end=PERIOD_END)
+
+        assert report.carbon_trends.avg_intensity_gco2_kwh.provenance is ValueProvenance.MEASURED
+        assert report.carbon_trends.min_intensity_gco2_kwh.provenance is ValueProvenance.UNAVAILABLE
+        assert report.workload_utilization.avg_cpu_request_ratio.provenance is ValueProvenance.MEASURED
+        assert report.workload_utilization.avg_memory_request_ratio.provenance is ValueProvenance.UNAVAILABLE
+        assert report.impact_estimates.estimated_co2_grams_avoided.available is False
+        assert any("Missing values are reported as unavailable" in n for n in report.data_quality_notes)
+
     def test_rejected_lifecycle_counted(self):
         lc = make_lifecycle(
             policy_status="REJECTED",
@@ -485,6 +552,7 @@ class TestWeeklyReportGeneratorEmpty:
         assert ie.estimated_kwh_saved.available is False
         assert ie.estimated_co2_grams_avoided.available is False
         assert ie.estimated_cost_saved_usd.available is False
+        assert ie.total_replica_hours_saved.provenance is ValueProvenance.UNAVAILABLE
 
     def test_empty_carbon_trends(self):
         gen = WeeklyReportGenerator()
@@ -626,6 +694,7 @@ class TestMarkdownRenderer:
         md = render_markdown(report)
 
         assert "[M]" in md   # measured values
+        assert "[CALC]" in md  # calculated values
         assert "[EST]" in md  # estimated values
 
     def test_legend_present(self, full_carbon_summary):
@@ -634,6 +703,7 @@ class TestMarkdownRenderer:
         md = render_markdown(report)
 
         assert "[M] = measured" in md
+        assert "[CALC] = calculated" in md
         assert "[EST] = estimated" in md
 
     def test_estimation_warning_present(self, full_carbon_summary):
@@ -676,6 +746,8 @@ class TestMarkdownRenderer:
         assert "Before" in md
         assert "After" in md
         assert "CPU ratio" in md
+        assert "Memory ratio" in md
+        assert "Request rate" in md
 
     def test_empty_events_shows_message(self):
         gen = WeeklyReportGenerator()

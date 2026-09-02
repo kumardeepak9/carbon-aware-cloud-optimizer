@@ -1,10 +1,11 @@
 """
 reports/models.py — Typed report data models for the weekly GreenOps report.
 
-Every field in every model carries a ``measured`` boolean indicating whether
-the value was directly observed from Prometheus / lifecycle data or estimated
-from derived calculations. This is a core design constraint: the report must
-never present an estimate as if it were a measurement.
+Every numeric report value carries explicit provenance so the report can
+distinguish direct measurements, deterministic calculations from measured
+inputs, documented estimates, and unavailable values. This is a core design
+constraint: the report must never present an estimate as if it were a
+measurement.
 
 Estimation methodology
 ----------------------
@@ -19,11 +20,22 @@ in the report metadata so readers can verify the calculation chain.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
+
+# ---------------------------------------------------------------------------
+# Value provenance
+# ---------------------------------------------------------------------------
+
+
+class ValueProvenance(StrEnum):
+    """How a report value was obtained."""
+
+    MEASURED = "measured"
+    CALCULATED = "calculated"
+    ESTIMATED = "estimated"
+    UNAVAILABLE = "unavailable"
 
 
 # ---------------------------------------------------------------------------
@@ -38,16 +50,29 @@ class ReportValue:
 
     Fields
     ------
-    value     : The numeric value itself (float or None if unavailable).
-    measured  : True if directly observed (Prometheus, lifecycle); False if estimated.
-    unit      : Human-readable unit string (e.g. 'gCO2eq/kWh', 'replicas', 'USD').
-    note      : Optional free-text explanation of how the value was derived.
+    value      : The numeric value itself (float or None if unavailable).
+    measured   : Compatibility flag; True only for direct measurements.
+    unit       : Human-readable unit string (e.g. 'gCO2eq/kWh', 'replicas', 'USD').
+    note       : Optional free-text explanation of how the value was derived.
+    provenance : measured, calculated, estimated, or unavailable.
     """
 
     value: float | None
     measured: bool
     unit: str = ""
     note: str = ""
+    provenance: ValueProvenance | None = None
+
+    def __post_init__(self) -> None:
+        if self.provenance is None:
+            provenance = (
+                ValueProvenance.UNAVAILABLE
+                if self.value is None
+                else ValueProvenance.MEASURED
+                if self.measured
+                else ValueProvenance.ESTIMATED
+            )
+            object.__setattr__(self, "provenance", provenance)
 
     @property
     def available(self) -> bool:
@@ -59,6 +84,7 @@ class ReportValue:
             "measured": self.measured,
             "unit": self.unit,
             "note": self.note,
+            "provenance": self.provenance.value if self.provenance else None,
         }
 
 
@@ -228,6 +254,10 @@ class OptimizationEventRecord:
     # Pre/post health
     pre_cpu_ratio: float | None = None
     post_cpu_ratio: float | None = None
+    pre_memory_ratio: float | None = None
+    post_memory_ratio: float | None = None
+    pre_request_rate: float | None = None
+    post_request_rate: float | None = None
     pre_p99_latency: float | None = None
     post_p99_latency: float | None = None
     pre_availability: float | None = None
@@ -279,9 +309,9 @@ class ImpactEstimates:
     """
     Derived impact estimates.
 
-    IMPORTANT: Every field here is an *estimate* based on measured replica
-    changes and the constants in ReportEstimationConfig. The report must
-    clearly label these as estimates, not measurements.
+    IMPORTANT: replica-hours are calculated from observed lifecycle state;
+    downstream CPU, energy, carbon, and cost impacts are estimates based on
+    ReportEstimationConfig. The report must clearly label each value.
     """
 
     total_replica_hours_saved: ReportValue = field(

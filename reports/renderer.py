@@ -8,18 +8,16 @@ Produces structured Markdown that can be:
 
 The renderer never invents data. Unavailable values are shown as "—" with
 a "(data unavailable)" label. Estimated values carry an "[EST]" marker.
-Measured values carry a "[M]" marker.
+Measured values carry a "[M]" marker. Calculated values carry a "[CALC]" marker.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from reports.models import (
-    ImpactEstimates,
-    OptimizationEventRecord,
     ReportValue,
+    ValueProvenance,
     WeeklyGreenOpsReport,
 )
 
@@ -48,7 +46,12 @@ def _v(rv: ReportValue, fmt: str = ".2f") -> str:
     """Format a ReportValue with provenance marker."""
     if rv.value is None:
         return "— *(data unavailable)*"
-    tag = "[M]" if rv.measured else "[EST]"
+    tags = {
+        ValueProvenance.MEASURED: "[M]",
+        ValueProvenance.CALCULATED: "[CALC]",
+        ValueProvenance.ESTIMATED: "[EST]",
+    }
+    tag = tags.get(rv.provenance, "[EST]")
     formatted = f"{rv.value:{fmt}}"
     unit = f" {rv.unit}" if rv.unit else ""
     return f"{formatted}{unit} {tag}"
@@ -58,7 +61,7 @@ def _ts(epoch: float | None) -> str:
     """Format a Unix timestamp to ISO 8601."""
     if epoch is None:
         return "—"
-    return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return datetime.fromtimestamp(epoch, tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +71,7 @@ def _ts(epoch: float | None) -> str:
 
 def _header(r: WeeklyGreenOpsReport) -> str:
     return "\n".join([
-        f"# GreenOps Weekly Report",
+        "# GreenOps Weekly Report",
         "",
         f"**Report ID:** `{r.report_id}`",
         f"**Period:** {r.period_start} → {r.period_end}",
@@ -78,8 +81,8 @@ def _header(r: WeeklyGreenOpsReport) -> str:
         "",
         "---",
         "",
-        "> **Legend:** [M] = measured value · [EST] = estimated value · "
-        "— = data unavailable",
+        "> **Legend:** [M] = measured value · [CALC] = calculated from measured "
+        "inputs · [EST] = estimated using documented assumptions · — = data unavailable",
     ])
 
 
@@ -120,8 +123,8 @@ def _optimization_summary(r: WeeklyGreenOpsReport) -> str:
     return "\n".join([
         "## Optimization Summary",
         "",
-        f"| Metric | Count |",
-        f"|---|---|",
+        "| Metric | Count |",
+        "|---|---|",
         f"| Total optimization cycles | {r.total_optimization_cycles} |",
         f"| Applied (GitOps change prepared) | {r.total_applied} |",
         f"| Approved by policy | {r.total_approved} |",
@@ -189,6 +192,8 @@ def _optimization_detail(r: WeeklyGreenOpsReport) -> str:
         # Pre/post health comparison
         if ev.was_applied and any([
             ev.pre_cpu_ratio, ev.post_cpu_ratio,
+            ev.pre_memory_ratio, ev.post_memory_ratio,
+            ev.pre_request_rate, ev.post_request_rate,
             ev.pre_p99_latency, ev.post_p99_latency,
         ]):
             lines.append("")
@@ -202,6 +207,16 @@ def _optimization_detail(r: WeeklyGreenOpsReport) -> str:
                 lines.append(
                     f"  | P99 latency | {_f(ev.pre_p99_latency, 's')} | "
                     f"{_f(ev.post_p99_latency, 's')} |"
+                )
+            if ev.pre_memory_ratio is not None or ev.post_memory_ratio is not None:
+                lines.append(
+                    f"  | Memory ratio | {_f(ev.pre_memory_ratio)} | "
+                    f"{_f(ev.post_memory_ratio)} |"
+                )
+            if ev.pre_request_rate is not None or ev.post_request_rate is not None:
+                lines.append(
+                    f"  | Request rate | {_f(ev.pre_request_rate, ' rps')} | "
+                    f"{_f(ev.post_request_rate, ' rps')} |"
                 )
             if ev.pre_availability is not None or ev.post_availability is not None:
                 lines.append(

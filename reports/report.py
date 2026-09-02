@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from config.settings import ReportingSettings
@@ -13,7 +13,7 @@ from reports.renderer import render_markdown
 
 def _default_period() -> tuple[datetime, datetime]:
     """Return the most recent seven-day UTC reporting window."""
-    end = datetime.now(timezone.utc).replace(microsecond=0)
+    end = datetime.now(UTC).replace(microsecond=0)
     start = end - timedelta(days=7)
     return start, end
 
