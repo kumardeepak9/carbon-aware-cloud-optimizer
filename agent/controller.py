@@ -80,9 +80,14 @@ class ClosedLoopController:
         gitops_workflow: GitOpsChangeWorkflow | None = None,
         verification_config: VerificationConfig | None = None,
         last_optimization_timestamp: float | None = None,
+        history_store: Any | None = None,
     ) -> None:
         self._prom = prometheus_client
         self._queries = queries
+        # Optional append-only audit sink (chat.history.DecisionHistoryStore).
+        # When set, every completed lifecycle is flattened and appended so the
+        # chat interface can answer historical questions from real records.
+        self._history_store = history_store
         self._safety_policy = OptimizationSafetyPolicy(safety_config or OptimizationSafetyConfig())
         self._agent = decision_agent or GreenOpsDecisionAgent(
             prometheus_client,
@@ -162,12 +167,35 @@ class ClosedLoopController:
                 {"error": str(exc), "stage": lifecycle.current_stage},
             )
             lifecycle.complete("ERROR")
+        finally:
+            # Persist every terminal lifecycle — including DEFERRED / BLOCKED
+            # (policy REJECTED) cycles that short-circuit above, so the chat
+            # interface can answer "were any recommendations rejected".
+            self._persist(lifecycle)
 
         log.info(
             "controller.cycle_complete",
             **lifecycle.summary(),
         )
         return lifecycle
+
+    def _persist(self, lifecycle: OptimizationLifecycle) -> None:
+        """Append the completed lifecycle to the decision-history store, if set.
+
+        Never raises: an audit-sink failure must not fail an optimization cycle.
+        """
+        if self._history_store is None:
+            return
+        try:
+            from chat.history import record_lifecycle
+
+            record_lifecycle(self._history_store, lifecycle)
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "controller.history_persist_failed",
+                error=str(exc),
+                lifecycle_id=lifecycle.lifecycle_id,
+            )
 
     # -----------------------------------------------------------------------
     # Stage 1: Observation

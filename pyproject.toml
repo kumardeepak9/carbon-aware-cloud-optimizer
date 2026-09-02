@@ -60,6 +60,7 @@ greenops-agent = "agent.agent:main"
 greenops-health = "agent.health_cli:main"
 greenops-gitops = "gitops.cli:main"
 greenops-report = "reports.report:main"
+greenops-chat = "chat.cli:main"
 
 # ---------------------------------------------------------------------------
 # Tool configuration
@@ -86,7 +87,7 @@ log_cli = true
 log_cli_level = "INFO"
 
 [tool.setuptools.packages.find]
-include = ["agent*", "app*", "carbon*", "config*", "gitops*", "monitoring*", "reports*"]
+include = ["agent*", "app*", "carbon*", "chat*", "config*", "gitops*", "monitoring*", "reports*"]
 exclude = ["tests*"]
 
 [tool.coverage.run]

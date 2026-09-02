@@ -278,6 +278,14 @@ class ReportingSettings(BaseSettings):
         description="APScheduler-compatible cron expression.",
     )
     output_dir: str = Field(default="./reports/output")
+    decision_history_path: str = Field(
+        default="./reports/decision-history.jsonl",
+        description=(
+            "Append-only JSONL log of completed optimization lifecycles. "
+            "Read by the weekly report and the chat query interface; the chat "
+            "interface answers historical questions only from these records."
+        ),
+    )
     recipients: str = Field(
         default="",
         description="Comma-separated list of email recipients.",

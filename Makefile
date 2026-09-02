@@ -13,7 +13,7 @@ RESET  := \033[0m
 
 .PHONY: help install install-dev lint format type-check test test-unit \
         test-integration coverage clean docker-up docker-down \
-        docker-build agent health gitops report
+        docker-build agent health gitops report chat
 
 help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -83,6 +83,9 @@ gitops:  ## Prepare a review-first GreenOps GitOps change
 
 report:  ## Generate a GreenOps weekly report
 	$(PYTHON) -m reports.report
+
+chat:  ## Ask the GreenOps chat interface (Q="your question")
+	$(PYTHON) -m chat.cli "$(Q)"
 
 # ---------------------------------------------------------------------------
 # Housekeeping
