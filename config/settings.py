@@ -19,11 +19,14 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ELECTRICITY_MAPS_ZONE_PATTERN = re.compile(r"^[A-Z0-9]{2,}(?:-[A-Z0-9]+)*$")
+_GIT_REF_COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
+_GITHUB_REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def _validate_electricity_maps_zone(value: object) -> str:
@@ -249,6 +252,20 @@ class GitOpsSettings(BaseSettings):
 
     @model_validator(mode="after")
     def gitops_settings_are_safe(self) -> GitOpsSettings:
+        if not _GIT_REF_COMPONENT_PATTERN.fullmatch(self.base_branch):
+            raise ValueError(
+                "GREENOPS_GITOPS_BASE_BRANCH must be a simple git branch name "
+                "containing only letters, numbers, '.', '_', '-', and '/'"
+            )
+        if ".." in self.base_branch or self.base_branch.endswith(("/", ".")):
+            raise ValueError("GREENOPS_GITOPS_BASE_BRANCH is not a safe git branch name")
+        if not _GIT_REF_COMPONENT_PATTERN.fullmatch(self.branch_prefix):
+            raise ValueError(
+                "GREENOPS_GITOPS_BRANCH_PREFIX must contain only letters, numbers, "
+                "'.', '_', '-', and '/' and must not start with '-'"
+            )
+        if ".." in self.branch_prefix or self.branch_prefix.endswith(("/", ".")):
+            raise ValueError("GREENOPS_GITOPS_BRANCH_PREFIX is not a safe git branch prefix")
         if self.manifest_path.is_absolute():
             raise ValueError("GREENOPS_GITOPS_MANIFEST_PATH must be relative to repo_path")
         if ".." in self.manifest_path.parts:
@@ -259,6 +276,17 @@ class GitOpsSettings(BaseSettings):
             raise ValueError(
                 "GREENOPS_GITOPS_GITHUB_REPOSITORY is required when PR creation is enabled"
             )
+        if self.github_repository and not _GITHUB_REPOSITORY_PATTERN.fullmatch(
+            self.github_repository
+        ):
+            raise ValueError(
+                "GREENOPS_GITOPS_GITHUB_REPOSITORY must be in owner/name format"
+            )
+        parsed_api_url = urlparse(self.github_api_url)
+        if parsed_api_url.scheme != "https" or not parsed_api_url.netloc:
+            raise ValueError("GREENOPS_GITOPS_GITHUB_API_URL must be an HTTPS URL")
+        if parsed_api_url.username or parsed_api_url.password:
+            raise ValueError("GREENOPS_GITOPS_GITHUB_API_URL must not contain credentials")
         if self.create_pull_request and self.github_token is None:
             raise ValueError("GREENOPS_GITOPS_GITHUB_TOKEN is required when PR creation is enabled")
         return self

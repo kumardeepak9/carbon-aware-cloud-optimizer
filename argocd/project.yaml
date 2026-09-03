@@ -42,12 +42,17 @@ spec:
       kind: Namespace
 
   # ── Namespace resource access ────────────────────────────────────────────────
-  # Deny cluster-wide role bindings; workloads cannot escalate privileges.
-  namespaceResourceBlacklist:
+  # Allow only the namespaced resource kinds used by the GreenOps workload.
+  # This prevents a future repo change from introducing Secrets, Roles,
+  # RoleBindings, ServiceAccounts, Jobs, or other privilege-bearing resources
+  # through these workload Applications.
+  namespaceResourceWhitelist:
     - group: ""
-      kind: ResourceQuota
+      kind: ConfigMap
     - group: ""
-      kind: LimitRange
+      kind: Service
+    - group: "apps"
+      kind: Deployment
 
   # ── Orphan resource monitoring ───────────────────────────────────────────────
   # Alert on resources that exist in the namespace but are not in Git.

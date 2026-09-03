@@ -32,6 +32,14 @@ services:
       - LOG_FORMAT=${LOG_FORMAT:-json}
     ports:
       - "8000:8080"    # Demo workload HTTP + metrics (greenops_demo_*)
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /tmp/uvicorn
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     networks:
       - greenops
@@ -57,6 +65,13 @@ services:
       - AGENT_POLL_INTERVAL_SECONDS=${AGENT_POLL_INTERVAL_SECONDS:-60}
     ports:
       - "8002:8002"    # Carbon metrics scrape endpoint (greenops_carbon_*)
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     networks:
       - greenops
@@ -75,9 +90,12 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--web.console.templates=/etc/prometheus/consoles"
       - "--web.console.libraries=/etc/prometheus/console_libraries"
-      - "--web.enable-lifecycle"
     ports:
       - "9090:9090"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     networks:
       - greenops
@@ -89,6 +107,10 @@ services:
     image: prom/pushgateway:v1.8.0
     ports:
       - "9091:9091"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     networks:
       - greenops
@@ -99,16 +121,15 @@ services:
   # Provisioning auto-loads:
   #   - Prometheus datasource (uid: prometheus, required for ${DS_PROMETHEUS} templates)
   #   - GreenOps AI dashboard from monitoring/dashboards/greenops_main.json
-  # Default login: admin / changeme  (override via GRAFANA_ADMIN_PASSWORD in .env)
+  # Set GRAFANA_ADMIN_PASSWORD in .env before starting Grafana.
   # ---------------------------------------------------------------------------
   grafana:
     image: grafana/grafana:10.4.3
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env before starting Grafana}
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/greenops_main.json
-      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
     volumes:
       - grafana_data:/var/lib/grafana
       # Provisioning: datasource config (creates Prometheus datasource automatically)
@@ -119,6 +140,10 @@ services:
       - ./monitoring/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3000:3000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - prometheus
     restart: unless-stopped

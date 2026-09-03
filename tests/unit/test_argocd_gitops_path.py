@@ -111,6 +111,17 @@ def test_project_only_grants_namespace_at_cluster_scope() -> None:
     assert proj["clusterResourceWhitelist"] == [{"group": "", "kind": "Namespace"}]
 
 
+def test_project_only_allows_expected_namespaced_workload_resources() -> None:
+    proj = _load(ARGOCD / "project.yaml")["spec"]
+    allowed = {(r["group"], r["kind"]) for r in proj["namespaceResourceWhitelist"]}
+    assert allowed == {
+        ("", "ConfigMap"),
+        ("", "Service"),
+        ("apps", "Deployment"),
+    }
+    assert "namespaceResourceBlacklist" not in proj
+
+
 # ---------------------------------------------------------------------------
 # dev / prod isolation
 # ---------------------------------------------------------------------------

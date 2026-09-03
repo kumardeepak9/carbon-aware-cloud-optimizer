@@ -13,6 +13,9 @@
 # ---------------------------------------------------------------------------
 FROM python:3.11-slim AS builder
 
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR /build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -39,11 +42,11 @@ LABEL org.opencontainers.image.title="greenops-carbon-exporter"
 LABEL org.opencontainers.image.description="GreenOps AI — Electricity Maps → Prometheus carbon metrics exporter."
 LABEL org.opencontainers.image.source="https://github.com/your-org/carbon-aware-cloud-optimizer"
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 RUN groupadd --gid 1001 appgroup \
     && useradd  --uid 1001 --gid 1001 --no-create-home --shell /sbin/nologin appuser
-
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
 
@@ -59,6 +62,6 @@ USER 1001
 EXPOSE 8002
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -sf http://localhost:8002/metrics | grep -q "greenops_carbon_data_available" || exit 1
+    CMD python -c "import urllib.request; data = urllib.request.urlopen('http://127.0.0.1:8002/metrics', timeout=3).read(); raise SystemExit(0 if b'greenops_carbon_data_available' in data else 1)"
 
 CMD ["python", "-m", "carbon.server"]
