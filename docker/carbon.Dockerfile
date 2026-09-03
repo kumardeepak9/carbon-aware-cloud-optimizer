@@ -52,10 +52,9 @@ COPY --from=builder /install /usr/local
 
 WORKDIR /app
 
-# Copy only the packages needed at runtime
-COPY carbon/    ./carbon/
-COPY config/    ./config/
-COPY monitoring/ ./monitoring/
+# Copy only the packages the carbon exporter imports at runtime
+COPY carbon/ ./carbon/
+COPY config/ ./config/
 
 USER 1001
 

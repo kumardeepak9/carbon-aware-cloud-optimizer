@@ -79,13 +79,7 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # ── 5. Pushgateway (for batch agent metrics) ──────────────────────────────
-  - job_name: "pushgateway"
-    honor_labels: true
-    static_configs:
-      - targets: ["pushgateway:9091"]
-
-  # ── 6. Carbon metrics exporter (Electricity Maps → Prometheus) ────────────
+  # ── 5. Carbon metrics exporter (Electricity Maps → Prometheus) ────────────
   # Exposes: greenops_carbon_intensity_gco2_per_kwh, greenops_carbon_renewable_percentage,
   #          greenops_carbon_fossil_fuel_percentage, greenops_carbon_low_carbon_percentage,
   #          greenops_carbon_last_update_timestamp_seconds, greenops_carbon_data_available,

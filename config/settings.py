@@ -28,6 +28,32 @@ _ELECTRICITY_MAPS_ZONE_PATTERN = re.compile(r"^[A-Z0-9]{2,}(?:-[A-Z0-9]+)*$")
 _GIT_REF_COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 _GITHUB_REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
+# Values that mean "this was never filled in". A placeholder secret must never
+# reach a real credential check — reject it eagerly so misconfiguration fails
+# at startup rather than at the first authenticated request.
+_PLACEHOLDER_SECRETS = frozenset(
+    {
+        "",
+        "changeme",
+        "your-api-key-here",
+        "your-github-token-here",
+        "your-github-token",
+        "your-token-here",
+        "replace-me",
+        "todo",
+        "xxx",
+    }
+)
+
+
+def _looks_like_placeholder(value: str) -> bool:
+    return value.strip().lower() in _PLACEHOLDER_SECRETS
+
+
+def _is_loopback_url(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"} or host.endswith(".local")
+
 
 def _validate_electricity_maps_zone(value: object) -> str:
     if not isinstance(value, str):
@@ -65,8 +91,8 @@ class AppSettings(BaseSettings):
 class ElectricityMapsSettings(BaseSettings):
     """Settings for the Electricity Maps API client."""
 
-    api_key: str = Field(
-        description="Electricity Maps API key — set via ELECTRICITY_MAPS_API_KEY.",
+    api_key: SecretStr = Field(
+        description="Electricity Maps API key — REQUIRED, set via ELECTRICITY_MAPS_API_KEY.",
     )
     base_url: str = Field(
         default="https://api.electricitymap.org/v3",
@@ -85,6 +111,24 @@ class ElectricityMapsSettings(BaseSettings):
     @classmethod
     def zone_must_be_valid(cls, v: object) -> str:
         return _validate_electricity_maps_zone(v)
+
+    @field_validator("api_key")
+    @classmethod
+    def api_key_must_be_real(cls, v: SecretStr) -> SecretStr:
+        if _looks_like_placeholder(v.get_secret_value()):
+            raise ValueError(
+                "ELECTRICITY_MAPS_API_KEY is unset or still a placeholder — "
+                "set a real key"
+            )
+        return v
+
+    @field_validator("base_url")
+    @classmethod
+    def base_url_must_be_https(cls, v: str) -> str:
+        parsed = urlparse(v)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("ELECTRICITY_MAPS_BASE_URL must be an https:// URL")
+        return v.rstrip("/")
 
     model_config = SettingsConfigDict(
         env_prefix="ELECTRICITY_MAPS_",
@@ -121,9 +165,6 @@ class PrometheusSettings(BaseSettings):
         default="http://localhost:9090",
         description="Prometheus HTTP API used by the read-only decision agent.",
     )
-    pushgateway_url: str = Field(
-        default="http://localhost:9091",
-    )
     metrics_export_port: int = Field(
         default=8000,
         ge=1024,
@@ -143,15 +184,7 @@ class AgentSettings(BaseSettings):
     poll_interval_seconds: int = Field(
         default=60,
         ge=10,
-        description="How frequently the agent polls the carbon intensity signal.",
-    )
-    carbon_intensity_threshold_high: float = Field(
-        default=250.0,
-        description="gCO2eq/kWh above which the agent scales workloads down.",
-    )
-    carbon_intensity_threshold_low: float = Field(
-        default=100.0,
-        description="gCO2eq/kWh below which the agent permits full-scale workloads.",
+        description="Carbon-exporter fetch interval (Electricity Maps poll cadence).",
     )
     min_replicas: int = Field(
         default=1,
@@ -190,12 +223,6 @@ class AgentSettings(BaseSettings):
         ge=0,
         description="Maximum acceptable carbon data age for optimization decisions.",
     )
-
-    @field_validator("carbon_intensity_threshold_low")
-    @classmethod
-    def low_must_be_less_than_high(cls, v: float, info: object) -> float:  # noqa: ANN001
-        # Validated after high is known
-        return v
 
     @model_validator(mode="after")
     def replica_bounds_are_consistent(self) -> AgentSettings:
@@ -299,13 +326,12 @@ class GitOpsSettings(BaseSettings):
 
 
 class ReportingSettings(BaseSettings):
-    """Settings for the weekly GreenOps report."""
+    """Settings for the weekly GreenOps report (`python -m reports.report`)."""
 
-    schedule_cron: str = Field(
-        default="0 8 * * MON",
-        description="APScheduler-compatible cron expression.",
+    output_dir: str = Field(
+        default="./reports/output",
+        description="Directory the generated weekly Markdown report is written to.",
     )
-    output_dir: str = Field(default="./reports/output")
     decision_history_path: str = Field(
         default="./reports/decision-history.jsonl",
         description=(
@@ -314,15 +340,6 @@ class ReportingSettings(BaseSettings):
             "interface answers historical questions only from these records."
         ),
     )
-    recipients: str = Field(
-        default="",
-        description="Comma-separated list of email recipients.",
-    )
-    smtp_host: str = Field(default="")
-    smtp_port: int = Field(default=587)
-    smtp_user: str = Field(default="")
-    smtp_password: str = Field(default="")
-    smtp_use_tls: bool = Field(default=True)
 
     model_config = SettingsConfigDict(
         env_prefix="REPORT_",
@@ -331,24 +348,81 @@ class ReportingSettings(BaseSettings):
     )
 
 
+class ConfigurationError(RuntimeError):
+    """Raised at startup when configuration is missing or unsafe for the environment."""
+
+
+def _environment_safety_problems(
+    app: AppSettings, prometheus: PrometheusSettings, gitops: GitOpsSettings
+) -> list[str]:
+    """Cross-cutting checks that are only unsafe *because* APP_ENV=production.
+
+    Each sub-model already validates its own fields; this catches the
+    dev-default-in-production combinations that no single model can see.
+    """
+    if app.app_env != "production":
+        return []
+    problems: list[str] = []
+    if app.log_format != "json":
+        problems.append("LOG_FORMAT must be 'json' in production (structured logs)")
+    if _is_loopback_url(prometheus.api_url):
+        problems.append(
+            f"PROMETHEUS_API_URL points at a loopback address ({prometheus.api_url}) "
+            "— set the real Prometheus endpoint"
+        )
+    if gitops.create_pull_request:
+        token = gitops.github_token
+        if token is None or _looks_like_placeholder(token.get_secret_value()):
+            problems.append(
+                "GREENOPS_GITOPS_GITHUB_TOKEN is unset or a placeholder while "
+                "GREENOPS_GITOPS_CREATE_PULL_REQUEST=true"
+            )
+    return problems
+
+
+def assert_safe_for_environment() -> None:
+    """Fail fast if dev-only configuration is active while APP_ENV=production.
+
+    Call from every process entry point. Only reads APP_ENV / LOG_FORMAT /
+    Prometheus / GitOps — it does NOT require the Electricity Maps key, so the
+    read-only agent, health, gitops and chat CLIs can call it safely.
+    """
+    problems = _environment_safety_problems(
+        AppSettings(), PrometheusSettings(), GitOpsSettings()
+    )
+    if problems:
+        raise ConfigurationError(
+            "Unsafe configuration for APP_ENV=production:\n  - " + "\n  - ".join(problems)
+        )
+
+
 class Settings:
     """
     Aggregated settings facade.
 
-    Instantiate once via ``get_settings()`` and inject where needed.
+    Instantiate once via ``get_settings()`` and inject where needed. Construction
+    fails fast: a missing required variable raises ``pydantic.ValidationError``
+    from the relevant sub-model, and an unsafe production combination raises
+    ``ConfigurationError``.
     """
 
     def __init__(self) -> None:
         self.app = AppSettings()
-        self.electricity_maps = ElectricityMapsSettings()
+        # api_key comes from ELECTRICITY_MAPS_API_KEY at runtime, not a kwarg.
+        self.electricity_maps = ElectricityMapsSettings()  # type: ignore[call-arg]
         self.kubernetes = KubernetesSettings()
         self.prometheus = PrometheusSettings()
         self.agent = AgentSettings()
         self.gitops = GitOpsSettings()
         self.reporting = ReportingSettings()
+        problems = _environment_safety_problems(self.app, self.prometheus, self.gitops)
+        if problems:
+            raise ConfigurationError(
+                "Unsafe configuration for APP_ENV=production:\n  - " + "\n  - ".join(problems)
+            )
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return the cached singleton Settings instance."""
+    """Return the cached singleton Settings instance (constructed once, fails fast)."""
     return Settings()

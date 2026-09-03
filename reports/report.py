@@ -6,6 +6,7 @@ import argparse
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from config import bootstrap
 from config.settings import ReportingSettings
 from reports.generator import WeeklyReportGenerator
 from reports.renderer import render_markdown
@@ -34,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     """Generate a report with available local lifecycle data."""
     args = build_parser().parse_args()
+    bootstrap()
     settings = ReportingSettings()
     output_dir = Path(args.output_dir or settings.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

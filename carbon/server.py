@@ -45,7 +45,7 @@ from prometheus_client import (
 
 from carbon.exporter import CarbonMetricsExporter
 from carbon.metrics import CarbonMetrics
-from config import get_logger
+from config import bootstrap, get_logger
 from config.settings import get_settings
 
 log = get_logger(__name__)
@@ -240,10 +240,11 @@ async def main() -> None:
     Configuration is read from environment variables via ``get_settings()``.
     Intended for ``python -m carbon.server`` or the ``greenops-carbon`` CLI entry point.
     """
+    bootstrap()
     settings = get_settings()
 
     server = CarbonMetricsServer(
-        api_key=settings.electricity_maps.api_key,
+        api_key=settings.electricity_maps.api_key.get_secret_value(),
         zone=settings.electricity_maps.zone,
         port=settings.prometheus.metrics_export_port + 2,  # 8000 + 2 = 8002
         poll_interval_seconds=settings.agent.poll_interval_seconds,

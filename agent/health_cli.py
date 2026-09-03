@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from agent.health import GreenOpsHealthChecker
+from config import bootstrap
 from config.settings import GitOpsSettings, PrometheusSettings
 from monitoring.client import PrometheusClient
 
@@ -23,6 +24,7 @@ async def run_once() -> None:
 
 def main() -> None:
     """Run a single health-check cycle."""
+    bootstrap()
     asyncio.run(run_once())
 
 

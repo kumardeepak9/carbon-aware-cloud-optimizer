@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 
-from agent.service import GreenOpsDecisionAgent
 from agent.safety import OptimizationSafetyConfig, OptimizationSafetyPolicy
+from agent.service import GreenOpsDecisionAgent
+from config import bootstrap
 from config.settings import AgentSettings, KubernetesSettings, PrometheusSettings
 from monitoring.client import PrometheusClient
 from monitoring.queries import GreenOpsQueries
@@ -39,6 +40,7 @@ async def run_once() -> None:
 
 def main() -> None:
     """Run one recommendation cycle for manual or scheduled read-only use."""
+    bootstrap()
     asyncio.run(run_once())
 
 

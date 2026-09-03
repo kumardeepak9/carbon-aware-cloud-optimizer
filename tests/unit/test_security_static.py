@@ -35,10 +35,20 @@ def test_compose_app_containers_drop_privileges_and_use_read_only_filesystems() 
 
 def test_compose_observability_services_drop_privileges() -> None:
     compose = yaml.safe_load((REPO / "docker-compose.yml").read_text(encoding="utf-8"))
-    for service_name in ("prometheus", "pushgateway", "grafana"):
+    for service_name in ("prometheus", "grafana"):
         service = compose["services"][service_name]
         assert service["cap_drop"] == ["ALL"]
         assert service["security_opt"] == ["no-new-privileges:true"]
+
+
+def test_compose_has_no_unused_pushgateway() -> None:
+    compose = yaml.safe_load((REPO / "docker-compose.yml").read_text(encoding="utf-8"))
+    assert "pushgateway" not in compose["services"], (
+        "nothing in the codebase pushes metrics — the pushgateway service, its "
+        "scrape job, and PROMETHEUS_PUSHGATEWAY_URL were removed as dead config"
+    )
+    prom = (REPO / "monitoring" / "prometheus.yml").read_text(encoding="utf-8")
+    assert "pushgateway" not in prom
 
 
 def test_compose_prometheus_lifecycle_api_is_not_enabled() -> None:
@@ -52,3 +62,25 @@ def test_compose_grafana_requires_non_default_admin_password() -> None:
     assert "admin / changeme" not in compose_text
     assert "GF_FEATURE_TOGGLES_ENABLE=publicDashboards" not in compose_text
     assert "GRAFANA_ADMIN_PASSWORD:?" in compose_text
+
+
+def test_compose_carbon_exporter_requires_api_key() -> None:
+    compose_text = (REPO / "docker-compose.yml").read_text(encoding="utf-8")
+    # no default, no placeholder: `docker compose up` fails fast if it's unset
+    assert "ELECTRICITY_MAPS_API_KEY:?" in compose_text
+    assert "ELECTRICITY_MAPS_API_KEY:-" not in compose_text
+
+
+def test_env_example_documents_required_variables() -> None:
+    text = (REPO / ".env.example").read_text(encoding="utf-8")
+    for required in ("ELECTRICITY_MAPS_API_KEY", "GRAFANA_ADMIN_PASSWORD"):
+        assert f"{required}=" in text and "[REQUIRED" in text
+    # dead variables must not reappear in the template
+    for dead in (
+        "PROMETHEUS_PUSHGATEWAY_URL",
+        "AGENT_CARBON_INTENSITY_THRESHOLD",
+        "REPORT_SMTP",
+        "REPORT_SCHEDULE_CRON",
+        "K8S_IN_CLUSTER",
+    ):
+        assert dead not in text

@@ -20,6 +20,7 @@ from chat.history import DecisionHistoryStore
 from chat.interface import GreenOpsChat
 from chat.models import GroundedAnswer
 from chat.retriever import HistoryRetriever, MetricRetriever
+from config import bootstrap
 from config.settings import PrometheusSettings, ReportingSettings
 from monitoring.client import PrometheusClient
 from monitoring.queries import GreenOpsQueries
@@ -70,6 +71,7 @@ def _emit(answer: GroundedAnswer, *, as_json: bool) -> None:
 
 
 def main() -> None:
+    bootstrap()
     args = _parser().parse_args()
     sys.exit(asyncio.run(_run(args)))
 

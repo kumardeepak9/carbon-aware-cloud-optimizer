@@ -71,6 +71,19 @@ def configure_logging(level: str = "INFO", fmt: str = "json") -> None:
     root.setLevel(level)
 
 
+def configure_logging_from_env() -> None:
+    """Configure logging from ``LOG_LEVEL`` / ``LOG_FORMAT`` (via ``AppSettings``).
+
+    Call once at the top of every process entry point. Without it, ``LOG_FORMAT``
+    is read from the environment but never applied, so a production deployment
+    silently keeps structlog's default (non-JSON) renderer.
+    """
+    from config.settings import AppSettings
+
+    app = AppSettings()
+    configure_logging(level=app.log_level, fmt=app.log_format)
+
+
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     """
     Return a named, bound structlog logger.

@@ -6,6 +6,7 @@ import asyncio
 
 from agent.safety import OptimizationSafetyConfig, OptimizationSafetyPolicy
 from agent.service import GreenOpsDecisionAgent
+from config import bootstrap
 from config.settings import AgentSettings, GitOpsSettings, KubernetesSettings, PrometheusSettings
 from gitops.workflow import GitOpsChangeWorkflow
 from monitoring.client import PrometheusClient
@@ -42,6 +43,7 @@ async def run_once() -> None:
 
 def main() -> None:
     """Run one review-first GitOps preparation cycle."""
+    bootstrap()
     asyncio.run(run_once())
 
 

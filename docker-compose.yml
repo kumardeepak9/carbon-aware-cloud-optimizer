@@ -1,13 +1,12 @@
 # =============================================================================
 # Carbon-Aware Cloud Optimizer — Local Development Stack
 # =============================================================================
-# Spins up: demo workload, carbon exporter, Prometheus, Grafana, Pushgateway
+# Spins up: demo workload, carbon exporter, Prometheus, Grafana
 #
 # Port allocation:
 #   8000 → Demo workload metrics (greenops_demo_*)
 #   8002 → Carbon exporter metrics (greenops_carbon_*)
 #   9090 → Prometheus
-#   9091 → Pushgateway
 #   3000 → Grafana
 #
 # Usage:
@@ -61,6 +60,8 @@ services:
       - path: .env
         required: false
     environment:
+      # REQUIRED — the exporter refuses to start without a real key (fail fast).
+      - ELECTRICITY_MAPS_API_KEY=${ELECTRICITY_MAPS_API_KEY:?set ELECTRICITY_MAPS_API_KEY in .env}
       - ELECTRICITY_MAPS_ZONE=${ELECTRICITY_MAPS_ZONE:-DE}
       - AGENT_POLL_INTERVAL_SECONDS=${AGENT_POLL_INTERVAL_SECONDS:-60}
     ports:
@@ -92,21 +93,6 @@ services:
       - "--web.console.libraries=/etc/prometheus/console_libraries"
     ports:
       - "9090:9090"
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    restart: unless-stopped
-    networks:
-      - greenops
-
-  # ---------------------------------------------------------------------------
-  # Prometheus Pushgateway (for batch/agent metrics)
-  # ---------------------------------------------------------------------------
-  pushgateway:
-    image: prom/pushgateway:v1.8.0
-    ports:
-      - "9091:9091"
     cap_drop:
       - ALL
     security_opt:
