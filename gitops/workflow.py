@@ -123,9 +123,7 @@ class GitOpsChangeWorkflow:
         ).previous_replicas
         revalidation_block = self._revalidate(recommendation, manifest_replicas)
         if revalidation_block is not None:
-            return self._blocked(
-                revalidation_block, audit, manifest_path=relative_manifest
-            )
+            return self._blocked(revalidation_block, audit, manifest_path=relative_manifest)
 
         branch_name = self._branch_name(validated)
         branch_already_exists = self._branch_exists(repo, branch_name)
@@ -164,7 +162,9 @@ class GitOpsChangeWorkflow:
                     changed_files=branch_diff_files,
                     manifest_path=relative_manifest,
                 )
-            status = GitOpsChangeStatus.PREPARED if branch_already_exists else GitOpsChangeStatus.NO_OP
+            status = (
+                GitOpsChangeStatus.PREPARED if branch_already_exists else GitOpsChangeStatus.NO_OP
+            )
             reason = (
                 "Dedicated GitOps branch already contains the recommended replica count."
                 if branch_already_exists

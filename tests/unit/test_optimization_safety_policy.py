@@ -58,14 +58,18 @@ def test_stale_carbon_data_is_rejected() -> None:
 
 
 def test_scale_down_below_minimum_replicas_is_rejected() -> None:
-    recommendation = DecisionPolicy().recommend(
-        _observation(replica_count_desired=2.0, replica_count_ready=2.0),
-        now=1_000.0,
-    ).model_copy(update={"recommended_replicas": 0})
+    recommendation = (
+        DecisionPolicy()
+        .recommend(
+            _observation(replica_count_desired=2.0, replica_count_ready=2.0),
+            now=1_000.0,
+        )
+        .model_copy(update={"recommended_replicas": 0})
+    )
 
-    validation = OptimizationSafetyPolicy(
-        OptimizationSafetyConfig(min_replicas=1)
-    ).validate(recommendation, now=1_000.0)
+    validation = OptimizationSafetyPolicy(OptimizationSafetyConfig(min_replicas=1)).validate(
+        recommendation, now=1_000.0
+    )
 
     assert validation.status is ValidationStatus.REJECTED
     assert "below minimum" in validation.reason
@@ -88,10 +92,14 @@ def test_unsafe_cpu_blocks_scale_down() -> None:
 
 
 def test_large_scale_down_requires_review() -> None:
-    recommendation = DecisionPolicy().recommend(
-        _observation(replica_count_desired=8.0, replica_count_ready=8.0),
-        now=1_000.0,
-    ).model_copy(update={"recommended_replicas": 3})
+    recommendation = (
+        DecisionPolicy()
+        .recommend(
+            _observation(replica_count_desired=8.0, replica_count_ready=8.0),
+            now=1_000.0,
+        )
+        .model_copy(update={"recommended_replicas": 3})
+    )
 
     validation = OptimizationSafetyPolicy().validate(recommendation, now=1_000.0)
 

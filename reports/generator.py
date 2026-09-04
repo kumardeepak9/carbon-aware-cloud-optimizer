@@ -174,9 +174,14 @@ class WeeklyReportGenerator:
 
     def _build_carbon_trends(self, notes: list[str]) -> CarbonTrendSummary:
         c = self._carbon
-        has_data = any(c.get(k) is not None for k in [
-            "avg_intensity", "min_intensity", "max_intensity",
-        ])
+        has_data = any(
+            c.get(k) is not None
+            for k in [
+                "avg_intensity",
+                "min_intensity",
+                "max_intensity",
+            ]
+        )
         required = {
             "avg_intensity": "average carbon intensity",
             "min_intensity": "minimum carbon intensity",
@@ -197,23 +202,28 @@ class WeeklyReportGenerator:
 
         return CarbonTrendSummary(
             avg_intensity_gco2_kwh=ReportValue(
-                c.get("avg_intensity"), measured=c.get("avg_intensity") is not None,
+                c.get("avg_intensity"),
+                measured=c.get("avg_intensity") is not None,
                 unit="gCO2eq/kWh",
             ),
             min_intensity_gco2_kwh=ReportValue(
-                c.get("min_intensity"), measured=c.get("min_intensity") is not None,
+                c.get("min_intensity"),
+                measured=c.get("min_intensity") is not None,
                 unit="gCO2eq/kWh",
             ),
             max_intensity_gco2_kwh=ReportValue(
-                c.get("max_intensity"), measured=c.get("max_intensity") is not None,
+                c.get("max_intensity"),
+                measured=c.get("max_intensity") is not None,
                 unit="gCO2eq/kWh",
             ),
             avg_renewable_pct=ReportValue(
-                c.get("avg_renewable_pct"), measured=c.get("avg_renewable_pct") is not None,
+                c.get("avg_renewable_pct"),
+                measured=c.get("avg_renewable_pct") is not None,
                 unit="%",
             ),
             avg_fossil_pct=ReportValue(
-                c.get("avg_fossil_pct"), measured=c.get("avg_fossil_pct") is not None,
+                c.get("avg_fossil_pct"),
+                measured=c.get("avg_fossil_pct") is not None,
                 unit="%",
             ),
             data_availability_pct=ReportValue(
@@ -229,9 +239,14 @@ class WeeklyReportGenerator:
 
     def _build_workload_utilization(self, notes: list[str]) -> WorkloadUtilizationSummary:
         w = self._workload
-        has_data = any(w.get(k) is not None for k in [
-            "avg_cpu_ratio", "avg_memory_ratio", "avg_replicas",
-        ])
+        has_data = any(
+            w.get(k) is not None
+            for k in [
+                "avg_cpu_ratio",
+                "avg_memory_ratio",
+                "avg_replicas",
+            ]
+        )
         required = {
             "avg_cpu_ratio": "average CPU request ratio",
             "avg_memory_ratio": "average memory request ratio",
@@ -253,31 +268,38 @@ class WeeklyReportGenerator:
 
         return WorkloadUtilizationSummary(
             avg_cpu_request_ratio=ReportValue(
-                w.get("avg_cpu_ratio"), measured=w.get("avg_cpu_ratio") is not None,
+                w.get("avg_cpu_ratio"),
+                measured=w.get("avg_cpu_ratio") is not None,
                 unit="ratio",
             ),
             avg_memory_request_ratio=ReportValue(
-                w.get("avg_memory_ratio"), measured=w.get("avg_memory_ratio") is not None,
+                w.get("avg_memory_ratio"),
+                measured=w.get("avg_memory_ratio") is not None,
                 unit="ratio",
             ),
             avg_replica_count=ReportValue(
-                w.get("avg_replicas"), measured=w.get("avg_replicas") is not None,
+                w.get("avg_replicas"),
+                measured=w.get("avg_replicas") is not None,
                 unit="replicas",
             ),
             avg_request_rate_rps=ReportValue(
-                w.get("avg_request_rate"), measured=w.get("avg_request_rate") is not None,
+                w.get("avg_request_rate"),
+                measured=w.get("avg_request_rate") is not None,
                 unit="rps",
             ),
             avg_p99_latency_seconds=ReportValue(
-                w.get("avg_p99_latency"), measured=w.get("avg_p99_latency") is not None,
+                w.get("avg_p99_latency"),
+                measured=w.get("avg_p99_latency") is not None,
                 unit="seconds",
             ),
             total_error_count=ReportValue(
-                w.get("total_errors"), measured=w.get("total_errors") is not None,
+                w.get("total_errors"),
+                measured=w.get("total_errors") is not None,
                 unit="errors",
             ),
             avg_availability_ratio=ReportValue(
-                w.get("avg_availability"), measured=w.get("avg_availability") is not None,
+                w.get("avg_availability"),
+                measured=w.get("avg_availability") is not None,
                 unit="ratio",
             ),
         )

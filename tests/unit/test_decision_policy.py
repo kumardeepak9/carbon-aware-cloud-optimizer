@@ -35,8 +35,14 @@ def _observation(**overrides: float | None) -> AgentObservation:
     values.update(overrides)
     snapshots = [
         MetricSnapshot(
-            name=name, query=name, value=value, timestamp=time.time(), unit="",
-            labels={"zone": "DE"} if name.startswith("carbon_") or name.endswith("percentage") else {},
+            name=name,
+            query=name,
+            value=value,
+            timestamp=time.time(),
+            unit="",
+            labels={"zone": "DE"}
+            if name.startswith("carbon_") or name.endswith("percentage")
+            else {},
         )
         for name, value in values.items()
         if value is not None
@@ -72,7 +78,9 @@ def test_low_load_low_carbon_recommends_keep() -> None:
 
 
 def test_unhealthy_application_recommends_scale_up_even_when_carbon_is_high() -> None:
-    decision = DecisionPolicy().recommend(_observation(replica_count_ready=2.0, pod_availability_ratio=2 / 3))
+    decision = DecisionPolicy().recommend(
+        _observation(replica_count_ready=2.0, pod_availability_ratio=2 / 3)
+    )
 
     assert decision.action is Action.SCALE_UP
     assert "not_all_replicas_ready" in decision.metadata.safety_guards_triggered
@@ -82,7 +90,9 @@ def test_unhealthy_application_recommends_scale_up_even_when_carbon_is_high() ->
 def test_missing_carbon_data_defers_without_a_replica_target() -> None:
     observation = _observation()
     observation.snapshots = [
-        snapshot for snapshot in observation.snapshots if snapshot.name != "carbon_intensity_gco2_kwh"
+        snapshot
+        for snapshot in observation.snapshots
+        if snapshot.name != "carbon_intensity_gco2_kwh"
     ]
 
     decision = DecisionPolicy().recommend(observation)

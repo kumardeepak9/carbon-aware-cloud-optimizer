@@ -129,7 +129,8 @@ def make_verifier(
     gitops_workflow=None,
 ) -> OptimizationVerifier:
     return OptimizationVerifier(
-        config=config or VerificationConfig(
+        config=config
+        or VerificationConfig(
             stabilization_period_seconds=0.0,
             min_deployment_wait_seconds=0.0,
         ),
@@ -360,7 +361,6 @@ class TestOptimizationVerifierDegraded:
         assert result.rollback_prepared is False
         assert any("CPU" in s for s in result.degradation_signals)
 
-
     @pytest.mark.asyncio
     async def test_high_memory_degraded(
         self, healthy_pre_snapshot, healthy_post_obs, scale_down_validated
@@ -582,9 +582,7 @@ class TestOptimizationVerifierInconclusive:
         assert "Prometheus" in result.reason
 
     @pytest.mark.asyncio
-    async def test_sparse_metrics_inconclusive(
-        self, healthy_pre_snapshot, scale_down_validated
-    ):
+    async def test_sparse_metrics_inconclusive(self, healthy_pre_snapshot, scale_down_validated):
         # Only 1 metric — below min_required_metrics=4
         sparse = {"cpu_request_ratio": 0.5}
         verifier = make_verifier()
@@ -603,9 +601,7 @@ class TestOptimizationVerifierInconclusive:
         assert result.outcome is VerificationOutcome.INCONCLUSIVE
 
     @pytest.mark.asyncio
-    async def test_custom_min_required_metrics(
-        self, healthy_pre_snapshot, scale_down_validated
-    ):
+    async def test_custom_min_required_metrics(self, healthy_pre_snapshot, scale_down_validated):
         sparse = {"cpu_request_ratio": 0.5, "http_error_rate_rps": 0.0}
         config = VerificationConfig(
             stabilization_period_seconds=0.0,
@@ -667,9 +663,7 @@ class TestOptimizationLifecycle:
     def test_complete_emits_lifecycle_completed_event(self):
         lc = OptimizationLifecycle()
         lc.complete("DEGRADED")
-        completion_events = [
-            e for e in lc.audit_events if e.event_type == "lifecycle.completed"
-        ]
+        completion_events = [e for e in lc.audit_events if e.event_type == "lifecycle.completed"]
         assert len(completion_events) == 1
         assert completion_events[0].data["outcome"] == "DEGRADED"
 
@@ -715,8 +709,12 @@ class TestClosedLoopController:
 
         snapshots = [
             MetricSnapshot(
-                name=k, query=k, value=v,
-                labels={}, timestamp=time.time(), unit="",
+                name=k,
+                query=k,
+                value=v,
+                labels={},
+                timestamp=time.time(),
+                unit="",
             )
             for k, v in obs_values.items()
         ]
@@ -801,7 +799,7 @@ class TestClosedLoopController:
             **pre_metrics,
             "replica_count_desired": 1.0,
             "replica_count_ready": 1.0,
-            "http_error_rate_rps": 0.15,   # violation
+            "http_error_rate_rps": 0.15,  # violation
             "http_p99_latency_seconds": 1.8,  # violation
         }
 
@@ -809,14 +807,19 @@ class TestClosedLoopController:
 
         async def collect_side_effect(*args, **kwargs):
             from monitoring.models import AgentObservation, MetricSnapshot
+
             nonlocal call_count
             call_count += 1
             obs = pre_metrics if call_count <= 2 else post_metrics
             return AgentObservation(
                 snapshots=[
                     MetricSnapshot(
-                        name=k, query=k, value=v,
-                        labels={}, timestamp=time.time(), unit="",
+                        name=k,
+                        query=k,
+                        value=v,
+                        labels={},
+                        timestamp=time.time(),
+                        unit="",
                     )
                     for k, v in obs.items()
                 ],
@@ -842,9 +845,7 @@ class TestClosedLoopController:
         )
 
         fake_gitops = AsyncMock()
-        fake_gitops.prepare_change = AsyncMock(
-            side_effect=[original_result, rollback_result]
-        )
+        fake_gitops.prepare_change = AsyncMock(side_effect=[original_result, rollback_result])
 
         controller = ClosedLoopController(
             prometheus_client=prom,

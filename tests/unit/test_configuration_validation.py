@@ -108,9 +108,7 @@ def test_electricity_maps_api_key_is_secret(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.parametrize("url", ["http://api.electricitymap.org/v3", "ftp://x", "not-a-url"])
-def test_electricity_maps_base_url_must_be_https(
-    url: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_electricity_maps_base_url_must_be_https(url: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ELECTRICITY_MAPS_API_KEY", REAL_KEY)
     monkeypatch.setenv("ELECTRICITY_MAPS_BASE_URL", url)
     with pytest.raises(ValidationError):
@@ -165,9 +163,7 @@ def test_assert_safe_for_environment_passes_in_development(
     "url",
     ["http://localhost:9090", "http://127.0.0.1:9090", "http://prometheus.local"],
 )
-def test_production_rejects_loopback_prometheus_url(
-    url: str, prod_env: pytest.MonkeyPatch
-) -> None:
+def test_production_rejects_loopback_prometheus_url(url: str, prod_env: pytest.MonkeyPatch) -> None:
     prod_env.setenv("PROMETHEUS_API_URL", url)
     with pytest.raises(ConfigurationError, match="PROMETHEUS_API_URL"):
         Settings()

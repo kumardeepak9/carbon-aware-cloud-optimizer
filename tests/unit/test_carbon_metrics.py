@@ -189,9 +189,7 @@ class TestPowerBreakdownModel:
         assert model.low_carbon_percentage == pytest.approx(70.0)
 
     def test_null_percentages_are_none(self) -> None:
-        payload = _breakdown_payload(
-            renewable_pct=None, fossil_pct=None, low_carbon_pct=None
-        )
+        payload = _breakdown_payload(renewable_pct=None, fossil_pct=None, low_carbon_pct=None)
         model = PowerBreakdownResponse.model_validate(payload)
         assert model.renewable_percentage is None
         assert model.fossil_fuel_percentage is None
@@ -251,9 +249,7 @@ class TestElectricityMapsDataModel:
         assert data.low_carbon_percentage == pytest.approx(70.0)
 
     def test_from_api_responses_without_breakdown(self) -> None:
-        data = ElectricityMapsData.from_api_responses(
-            self._make_intensity(200.0), breakdown=None
-        )
+        data = ElectricityMapsData.from_api_responses(self._make_intensity(200.0), breakdown=None)
         assert data.carbon_intensity_gco2_per_kwh == pytest.approx(200.0)
         assert data.renewable_percentage is None
         assert data.fossil_fuel_percentage is None
@@ -366,9 +362,7 @@ class TestCarbonMetricsExporterSuccessfulUpdate:
         respx.get(f"{FAKE_BASE_URL}/power-breakdown/latest").mock(
             return_value=Response(
                 200,
-                json=_breakdown_payload(
-                    renewable_pct=65.0, fossil_pct=10.0, low_carbon_pct=80.0
-                ),
+                json=_breakdown_payload(renewable_pct=65.0, fossil_pct=10.0, low_carbon_pct=80.0),
             )
         )
 
@@ -495,7 +489,9 @@ class TestCarbonMetricsExporterUnavailable:
 
         assert result is None
         assert _gauge_value(metrics, "data_available") == pytest.approx(0.0)
-        assert _counter_value(metrics, "scrape_errors_total", error_type="http") == pytest.approx(1.0)
+        assert _counter_value(metrics, "scrape_errors_total", error_type="http") == pytest.approx(
+            1.0
+        )
 
     @pytest.mark.asyncio
     @respx.mock
@@ -550,7 +546,9 @@ class TestCarbonMetricsExporterUnavailable:
 
         assert result is None
         assert _gauge_value(metrics, "data_available") == pytest.approx(0.0)
-        assert _counter_value(metrics, "scrape_errors_total", error_type="parse") == pytest.approx(1.0)
+        assert _counter_value(metrics, "scrape_errors_total", error_type="parse") == pytest.approx(
+            1.0
+        )
 
     @pytest.mark.asyncio
     @respx.mock
@@ -566,7 +564,9 @@ class TestCarbonMetricsExporterUnavailable:
             result = await exporter.update()
 
         assert result is None
-        assert _counter_value(metrics, "scrape_errors_total", error_type="parse") == pytest.approx(1.0)
+        assert _counter_value(metrics, "scrape_errors_total", error_type="parse") == pytest.approx(
+            1.0
+        )
 
     @pytest.mark.asyncio
     @respx.mock
@@ -584,11 +584,7 @@ class TestCarbonMetricsExporterUnavailable:
 
         logged = " ".join(
             [str(arg) for call in warning.call_args_list for arg in call.args]
-            + [
-                str(value)
-                for call in warning.call_args_list
-                for value in call.kwargs.values()
-            ]
+            + [str(value) for call in warning.call_args_list for value in call.kwargs.values()]
         )
         assert FAKE_API_KEY not in logged
         assert "[redacted]" in logged
@@ -895,9 +891,9 @@ class TestCarbonMetricsTimestampHandling:
 
         assert result is None
         assert _gauge_value(metrics, "data_available") == pytest.approx(0.0)
-        assert _counter_value(
-            metrics, "scrape_errors_total", error_type="stale"
-        ) == pytest.approx(1.0)
+        assert _counter_value(metrics, "scrape_errors_total", error_type="stale") == pytest.approx(
+            1.0
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1090,9 +1086,7 @@ class TestScrapeTimingHistogram:
             await exporter.update()
 
         # histogram _count should be 1
-        count = metrics.scrape_duration_seconds.labels(
-            zone=FAKE_ZONE
-        )._sum.get()  # noqa: SLF001
+        count = metrics.scrape_duration_seconds.labels(zone=FAKE_ZONE)._sum.get()  # noqa: SLF001
         assert count > 0.0  # some positive duration was recorded
 
     @pytest.mark.asyncio
@@ -1109,7 +1103,5 @@ class TestScrapeTimingHistogram:
         async with exporter:
             await exporter.update()
 
-        count = metrics.scrape_duration_seconds.labels(
-            zone=FAKE_ZONE
-        )._sum.get()  # noqa: SLF001
+        count = metrics.scrape_duration_seconds.labels(zone=FAKE_ZONE)._sum.get()  # noqa: SLF001
         assert count >= 0.0  # recorded (may be ~0 in fast test environments)

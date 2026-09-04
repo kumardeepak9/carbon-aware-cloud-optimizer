@@ -206,7 +206,5 @@ class OptimizationLifecycle(BaseModel):
             "rollback_prepared": self.rollback_prepared,
             "safety_violations": self.safety_thresholds_violated,
             "audit_event_count": len(self.audit_events),
-            "duration_seconds": (
-                round((self.completed_at or time.time()) - self.started_at, 3)
-            ),
+            "duration_seconds": (round((self.completed_at or time.time()) - self.started_at, 3)),
         }

@@ -108,7 +108,7 @@ class GreenOpsQueries:
         return QuerySpec(
             name="cpu_utilization_cores",
             expr=(
-                f'sum(rate(container_cpu_usage_seconds_total{{'
+                f"sum(rate(container_cpu_usage_seconds_total{{"
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
                 f'container="{self._container}"'
@@ -123,12 +123,12 @@ class GreenOpsQueries:
         return QuerySpec(
             name="cpu_request_ratio",
             expr=(
-                f'sum(rate(container_cpu_usage_seconds_total{{'
+                f"sum(rate(container_cpu_usage_seconds_total{{"
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
                 f'container="{self._container}"'
                 f"}}[2m])) / "
-                f'sum(kube_pod_container_resource_requests{{'
+                f"sum(kube_pod_container_resource_requests{{"
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
                 f'container="{self._container}",'
@@ -148,7 +148,7 @@ class GreenOpsQueries:
         return QuerySpec(
             name="memory_utilization_bytes",
             expr=(
-                f'sum(container_memory_working_set_bytes{{'
+                f"sum(container_memory_working_set_bytes{{"
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
                 f'container="{self._container}"'
@@ -163,12 +163,12 @@ class GreenOpsQueries:
         return QuerySpec(
             name="memory_request_ratio",
             expr=(
-                f'sum(container_memory_working_set_bytes{{'
+                f"sum(container_memory_working_set_bytes{{"
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
                 f'container="{self._container}"'
                 f"}}) / "
-                f'sum(kube_pod_container_resource_requests{{'
+                f"sum(kube_pod_container_resource_requests{{"
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*",'
                 f'container="{self._container}",'
@@ -188,10 +188,7 @@ class GreenOpsQueries:
         return QuerySpec(
             name="replica_count_desired",
             expr=(
-                f'kube_deployment_spec_replicas{{'
-                f'namespace="{self._ns}",'
-                f'deployment="{self._dep}"'
-                f"}}"
+                f'kube_deployment_spec_replicas{{namespace="{self._ns}",deployment="{self._dep}"}}'
             ),
             unit="replicas",
             description="Desired replica count set in the Deployment spec.",
@@ -202,7 +199,7 @@ class GreenOpsQueries:
         return QuerySpec(
             name="replica_count_ready",
             expr=(
-                f'kube_deployment_status_replicas_ready{{'
+                f"kube_deployment_status_replicas_ready{{"
                 f'namespace="{self._ns}",'
                 f'deployment="{self._dep}"'
                 f"}}"
@@ -216,19 +213,18 @@ class GreenOpsQueries:
         return QuerySpec(
             name="pod_availability_ratio",
             expr=(
-                f'kube_deployment_status_replicas_ready{{'
+                f"kube_deployment_status_replicas_ready{{"
                 f'namespace="{self._ns}",'
                 f'deployment="{self._dep}"'
                 f"}} / "
-                f'kube_deployment_spec_replicas{{'
+                f"kube_deployment_spec_replicas{{"
                 f'namespace="{self._ns}",'
                 f'deployment="{self._dep}"'
                 f"}}"
             ),
             unit="ratio",
             description=(
-                "Ready replicas / desired replicas. "
-                "Agent will not scale down if this is below 1.0."
+                "Ready replicas / desired replicas. Agent will not scale down if this is below 1.0."
             ),
         )
 
@@ -237,7 +233,7 @@ class GreenOpsQueries:
         return QuerySpec(
             name="pod_restart_rate",
             expr=(
-                f'sum(rate(kube_pod_container_status_restarts_total{{'
+                f"sum(rate(kube_pod_container_status_restarts_total{{"
                 f'namespace="{self._ns}",'
                 f'pod=~"{self._dep}-.*"'
                 f"}}[5m]))"
@@ -265,7 +261,7 @@ class GreenOpsQueries:
         return QuerySpec(
             name="http_request_rate_rps",
             expr=(
-                f'sum(rate(greenops_demo_http_requests_total{{'
+                f"sum(rate(greenops_demo_http_requests_total{{"
                 f'namespace="{self._ns}"'
                 f"}}[2m])) or vector(0)"
             ),
@@ -285,7 +281,7 @@ class GreenOpsQueries:
         return QuerySpec(
             name="http_error_rate_rps",
             expr=(
-                f'sum(rate(greenops_demo_http_requests_total{{'
+                f"sum(rate(greenops_demo_http_requests_total{{"
                 f'namespace="{self._ns}",'
                 f'status_code=~"5.."'
                 f"}}[2m])) or vector(0)"
@@ -299,8 +295,8 @@ class GreenOpsQueries:
         return QuerySpec(
             name="http_p99_latency_seconds",
             expr=(
-                f'histogram_quantile(0.99, sum(rate('
-                f'greenops_demo_http_request_duration_seconds_bucket{{'
+                f"histogram_quantile(0.99, sum(rate("
+                f"greenops_demo_http_request_duration_seconds_bucket{{"
                 f'namespace="{self._ns}"'
                 f"}}[2m])) by (le))"
             ),
@@ -313,8 +309,8 @@ class GreenOpsQueries:
         return QuerySpec(
             name="http_p50_latency_seconds",
             expr=(
-                f'histogram_quantile(0.50, sum(rate('
-                f'greenops_demo_http_request_duration_seconds_bucket{{'
+                f"histogram_quantile(0.50, sum(rate("
+                f"greenops_demo_http_request_duration_seconds_bucket{{"
                 f'namespace="{self._ns}"'
                 f"}}[2m])) by (le))"
             ),
@@ -330,9 +326,7 @@ class GreenOpsQueries:
         """Cluster-wide CPU utilization ratio across all nodes."""
         return QuerySpec(
             name="node_cpu_utilization_ratio",
-            expr=(
-                "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[2m]))"
-            ),
+            expr=('1 - avg(rate(node_cpu_seconds_total{mode="idle"}[2m]))'),
             unit="ratio",
             description=(
                 "Fraction of total node CPU in use (0–1). "

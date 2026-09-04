@@ -252,7 +252,7 @@ class CarbonMetricsExporter:
         return ElectricityMapsData.from_api_responses(intensity, breakdown)
 
     async def _fetch_carbon_intensity(
-        self, params: dict
+        self, params: dict[str, str]
     ) -> CarbonIntensityResponse | None:
         """
         Fetch /carbon-intensity/latest.
@@ -300,9 +300,7 @@ class CarbonMetricsExporter:
             self._mark_unavailable(_ERR_PARSE)
             return None
 
-    async def _fetch_power_breakdown(
-        self, params: dict
-    ) -> PowerBreakdownResponse | None:
+    async def _fetch_power_breakdown(self, params: dict[str, str]) -> PowerBreakdownResponse | None:
         """
         Fetch /power-breakdown/latest.
 
@@ -362,34 +360,22 @@ class CarbonMetricsExporter:
         zone = data.zone
 
         # Always updated on success
-        self._metrics.intensity.labels(zone=zone).set(
-            data.carbon_intensity_gco2_per_kwh
-        )
-        self._metrics.last_update_timestamp.labels(zone=zone).set(
-            data.data_timestamp_unix
-        )
+        self._metrics.intensity.labels(zone=zone).set(data.carbon_intensity_gco2_per_kwh)
+        self._metrics.last_update_timestamp.labels(zone=zone).set(data.data_timestamp_unix)
         self._metrics.data_available.labels(zone=zone).set(1)
 
         # Optional — only when power-breakdown data is available
         if data.renewable_percentage is not None:
-            self._metrics.renewable_percentage.labels(zone=zone).set(
-                data.renewable_percentage
-            )
+            self._metrics.renewable_percentage.labels(zone=zone).set(data.renewable_percentage)
         if data.fossil_fuel_percentage is not None:
-            self._metrics.fossil_fuel_percentage.labels(zone=zone).set(
-                data.fossil_fuel_percentage
-            )
+            self._metrics.fossil_fuel_percentage.labels(zone=zone).set(data.fossil_fuel_percentage)
         if data.low_carbon_percentage is not None:
-            self._metrics.low_carbon_percentage.labels(zone=zone).set(
-                data.low_carbon_percentage
-            )
+            self._metrics.low_carbon_percentage.labels(zone=zone).set(data.low_carbon_percentage)
 
     def _mark_unavailable(self, error_type: str) -> None:
         """Record a failed or unsafe carbon fetch without raising."""
         self._metrics.data_available.labels(zone=self._zone).set(0)
-        self._metrics.scrape_errors_total.labels(
-            zone=self._zone, error_type=error_type
-        ).inc()
+        self._metrics.scrape_errors_total.labels(zone=self._zone, error_type=error_type).inc()
 
     def _is_stale(self, data: ElectricityMapsData) -> bool:
         if self._max_data_age_seconds is None:

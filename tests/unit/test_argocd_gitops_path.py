@@ -46,7 +46,9 @@ def _kustomize(path: Path) -> list[dict]:
         pytest.skip("kubectl not available for kustomize rendering")
     out = subprocess.run(
         [kubectl, "kustomize", str(path)],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout
     return [d for d in yaml.safe_load_all(out) if d]
 
@@ -69,7 +71,9 @@ def test_repo_url_matches_git_origin() -> None:
     try:
         origin = subprocess.run(
             ["git", "-C", str(REPO), "remote", "get-url", "origin"],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("no git origin")
@@ -139,11 +143,7 @@ def test_overlay_namespace_matches_its_application_destination() -> None:
     ]:
         app_ns = _load(app)["spec"]["destination"]["namespace"]
         rendered = _kustomize(overlay)
-        rendered_ns = {
-            d["metadata"].get("namespace")
-            for d in rendered
-            if d["kind"] != "Namespace"
-        }
+        rendered_ns = {d["metadata"].get("namespace") for d in rendered if d["kind"] != "Namespace"}
         assert rendered_ns == {app_ns}, f"{overlay}: {rendered_ns} != {app_ns}"
         ns_objs = [d["metadata"]["name"] for d in rendered if d["kind"] == "Namespace"]
         assert ns_objs == [app_ns]
@@ -168,8 +168,7 @@ def test_dev_and_prod_never_manage_the_same_object() -> None:
 def test_workload_sync_is_not_automated(app: Path) -> None:
     sync_policy = _load(app)["spec"].get("syncPolicy", {})
     assert "automated" not in sync_policy, (
-        f"{app.stem}: automated sync would let a merged PR change the cluster "
-        "with no human trigger"
+        f"{app.stem}: automated sync would let a merged PR change the cluster with no human trigger"
     )
 
 

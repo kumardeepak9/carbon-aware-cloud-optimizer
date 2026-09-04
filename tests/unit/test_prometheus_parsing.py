@@ -50,8 +50,7 @@ def _vector(*samples: tuple[dict, str]) -> dict:
         "data": {
             "resultType": "vector",
             "result": [
-                {"metric": metric, "value": [time.time(), value]}
-                for metric, value in samples
+                {"metric": metric, "value": [time.time(), value]} for metric, value in samples
             ],
         },
     }
@@ -98,7 +97,9 @@ class TestMultiSeriesResults:
         resp = PrometheusResponse.model_validate(
             _vector(({"zone": "DE"}, "1.0"), ({"zone": "FR"}, "2.0"))
         )
-        snaps = PrometheusClient.parse_vector_to_snapshots(resp, _spec("greenops_carbon_data_available"))
+        snaps = PrometheusClient.parse_vector_to_snapshots(
+            resp, _spec("greenops_carbon_data_available")
+        )
         assert len(snaps) == 2
 
     @pytest.mark.asyncio
@@ -106,7 +107,9 @@ class TestMultiSeriesResults:
     async def test_collect_uses_first_series_when_ambiguous(self) -> None:
         # Every query returns two series; collect_agent_observation keeps [0].
         respx.get(QUERY_URL).mock(
-            return_value=Response(200, json=_vector(({"zone": "DE"}, "7.0"), ({"zone": "FR"}, "9.0")))
+            return_value=Response(
+                200, json=_vector(({"zone": "DE"}, "7.0"), ({"zone": "FR"}, "9.0"))
+            )
         )
         qs = GreenOpsQueries()
         async with PrometheusClient(base_url=PROM, max_retries=0) as client:
@@ -127,7 +130,12 @@ class TestErrorEnvelopeClassification:
         respx.get(QUERY_URL).mock(
             return_value=Response(
                 400,
-                json={"status": "error", "errorType": "bad_data", "error": "parse error", "data": None},
+                json={
+                    "status": "error",
+                    "errorType": "bad_data",
+                    "error": "parse error",
+                    "data": None,
+                },
             )
         )
         async with PrometheusClient(base_url=PROM, max_retries=1) as client:
@@ -141,7 +149,12 @@ class TestErrorEnvelopeClassification:
         respx.get(QUERY_URL).mock(
             return_value=Response(
                 503,
-                json={"status": "error", "errorType": "unavailable", "error": "no ingesters", "data": None},
+                json={
+                    "status": "error",
+                    "errorType": "unavailable",
+                    "error": "no ingesters",
+                    "data": None,
+                },
             )
         )
         async with PrometheusClient(base_url=PROM, max_retries=2) as client:
@@ -173,7 +186,9 @@ class TestRetries:
                 Response(200, json=_vector(({}, "3.0"))),
             ]
         )
-        async with PrometheusClient(base_url=PROM, max_retries=2, retry_backoff_seconds=0.0) as client:
+        async with PrometheusClient(
+            base_url=PROM, max_retries=2, retry_backoff_seconds=0.0
+        ) as client:
             resp = await client.instant_query("up")
         assert route.call_count == 2
         assert float(resp.as_vector().result[0].value[1]) == 3.0
@@ -182,7 +197,9 @@ class TestRetries:
     @respx.mock
     async def test_retries_are_bounded_then_raise(self) -> None:
         route = respx.get(QUERY_URL).mock(side_effect=httpx.ConnectError("down"))
-        async with PrometheusClient(base_url=PROM, max_retries=2, retry_backoff_seconds=0.0) as client:
+        async with PrometheusClient(
+            base_url=PROM, max_retries=2, retry_backoff_seconds=0.0
+        ) as client:
             with pytest.raises(PrometheusConnectionError):
                 await client.instant_query("up")
         assert route.call_count == 3  # 1 initial + 2 retries
@@ -191,9 +208,13 @@ class TestRetries:
     @respx.mock
     async def test_query_error_is_not_retried(self) -> None:
         route = respx.get(QUERY_URL).mock(
-            return_value=Response(200, json={"status": "error", "errorType": "bad_data", "error": "x", "data": None})
+            return_value=Response(
+                200, json={"status": "error", "errorType": "bad_data", "error": "x", "data": None}
+            )
         )
-        async with PrometheusClient(base_url=PROM, max_retries=3, retry_backoff_seconds=0.0) as client:
+        async with PrometheusClient(
+            base_url=PROM, max_retries=3, retry_backoff_seconds=0.0
+        ) as client:
             with pytest.raises(PrometheusQueryError):
                 await client.instant_query("bad")
         assert route.call_count == 1
@@ -211,7 +232,9 @@ class TestObservationMissingData:
         # resultType 'matrix' is invalid for an instant query -> every parse fails,
         # but collect_agent_observation must still return (empty) rather than raise.
         respx.get(QUERY_URL).mock(
-            return_value=Response(200, json={"status": "success", "data": {"resultType": "matrix", "result": []}})
+            return_value=Response(
+                200, json={"status": "success", "data": {"resultType": "matrix", "result": []}}
+            )
         )
         qs = GreenOpsQueries()
         async with PrometheusClient(base_url=PROM, max_retries=0) as client:
@@ -232,7 +255,9 @@ class TestObservationMissingData:
     @respx.mock
     async def test_completeness_gauge_zero_when_all_empty(self) -> None:
         respx.get(QUERY_URL).mock(
-            return_value=Response(200, json={"status": "success", "data": {"resultType": "vector", "result": []}})
+            return_value=Response(
+                200, json={"status": "success", "data": {"resultType": "vector", "result": []}}
+            )
         )
         qs = GreenOpsQueries()
         async with PrometheusClient(base_url=PROM, max_retries=0) as client:
@@ -250,7 +275,12 @@ class TestObservationMissingData:
 class TestQueryCorrectness:
     def test_container_label_matches_pod_spec_name_not_deployment(self) -> None:
         qs = GreenOpsQueries()
-        for method in ("cpu_utilization", "cpu_request_ratio", "memory_utilization_bytes", "memory_request_ratio"):
+        for method in (
+            "cpu_utilization",
+            "cpu_request_ratio",
+            "memory_utilization_bytes",
+            "memory_request_ratio",
+        ):
             expr = getattr(qs, method)().expr
             assert 'container="workload"' in expr, method
             assert 'container="greenops-demo-workload"' not in expr, method
@@ -269,7 +299,11 @@ class TestQueryCorrectness:
 
     def test_histogram_queries_aggregate_by_le(self) -> None:
         qs = GreenOpsQueries()
-        for method in ("http_p99_latency_seconds", "http_p50_latency_seconds", "agent_poll_latency"):
+        for method in (
+            "http_p99_latency_seconds",
+            "http_p50_latency_seconds",
+            "agent_poll_latency",
+        ):
             assert "by (le)" in getattr(qs, method)().expr, method
 
 

@@ -17,11 +17,11 @@ Usage::
     result = await client.instant_query(GreenOpsQueries.cpu_utilization())
 """
 
-from monitoring.client import PrometheusClient, PrometheusError, PrometheusQueryError
-from monitoring.queries import GreenOpsQueries
-from monitoring.metrics import AgentMetrics
 from carbon.metrics import CarbonMetrics
 from carbon.models import ElectricityMapsData
+from monitoring.client import PrometheusClient, PrometheusError, PrometheusQueryError
+from monitoring.metrics import AgentMetrics
+from monitoring.queries import GreenOpsQueries
 
 __all__ = [
     "PrometheusClient",

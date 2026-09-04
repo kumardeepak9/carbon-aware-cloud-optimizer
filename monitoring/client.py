@@ -285,8 +285,7 @@ class PrometheusClient:
             payload = resp.json()
         except (json.JSONDecodeError, ValueError) as exc:
             raise PrometheusConnectionError(
-                f"Non-JSON response from Prometheus (HTTP {resp.status_code}) "
-                f"for {query!r}: {exc}"
+                f"Non-JSON response from Prometheus (HTTP {resp.status_code}) for {query!r}: {exc}"
             ) from exc
         try:
             return PrometheusResponse.model_validate(payload)
@@ -576,9 +575,9 @@ class PrometheusClient:
                     metric_name=spec.name, error_type="malformed_response"
                 ).inc()
             finally:
-                AGENT_PROMETHEUS_QUERY_DURATION_SECONDS.labels(
-                    metric_name=spec.name
-                ).observe(time.perf_counter() - q0)
+                AGENT_PROMETHEUS_QUERY_DURATION_SECONDS.labels(metric_name=spec.name).observe(
+                    time.perf_counter() - q0
+                )
 
         total = len(decision_inputs)
         completeness = len(collected_snapshots) / total if total else 0.0

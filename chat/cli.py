@@ -27,9 +27,13 @@ from monitoring.queries import GreenOpsQueries
 
 
 def _parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="chat.cli", description="Ask GreenOps about its optimization history.")
+    p = argparse.ArgumentParser(
+        prog="chat.cli", description="Ask GreenOps about its optimization history."
+    )
     p.add_argument("question", nargs="+", help="the question to ask")
-    p.add_argument("--json", action="store_true", help="print the structured GroundedAnswer as JSON")
+    p.add_argument(
+        "--json", action="store_true", help="print the structured GroundedAnswer as JSON"
+    )
     p.add_argument("--no-metrics", action="store_true", help="do not attempt to reach Prometheus")
     p.add_argument("--history-path", default=None, help="override the decision-history JSONL path")
     return p

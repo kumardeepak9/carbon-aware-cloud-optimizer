@@ -46,12 +46,12 @@ def _v(rv: ReportValue, fmt: str = ".2f") -> str:
     """Format a ReportValue with provenance marker."""
     if rv.value is None:
         return "— *(data unavailable)*"
-    tags = {
+    tags: dict[ValueProvenance, str] = {
         ValueProvenance.MEASURED: "[M]",
         ValueProvenance.CALCULATED: "[CALC]",
         ValueProvenance.ESTIMATED: "[EST]",
     }
-    tag = tags.get(rv.provenance, "[EST]")
+    tag = tags.get(rv.provenance or ValueProvenance.ESTIMATED, "[EST]")
     formatted = f"{rv.value:{fmt}}"
     unit = f" {rv.unit}" if rv.unit else ""
     return f"{formatted}{unit} {tag}"
@@ -70,69 +70,77 @@ def _ts(epoch: float | None) -> str:
 
 
 def _header(r: WeeklyGreenOpsReport) -> str:
-    return "\n".join([
-        "# GreenOps Weekly Report",
-        "",
-        f"**Report ID:** `{r.report_id}`",
-        f"**Period:** {r.period_start} → {r.period_end}",
-        f"**Region:** {r.region or '*(not specified)*'}",
-        f"**Deployment:** `{r.deployment}` in `{r.namespace}`",
-        f"**Generated:** {r.generated_at}",
-        "",
-        "---",
-        "",
-        "> **Legend:** [M] = measured value · [CALC] = calculated from measured "
-        "inputs · [EST] = estimated using documented assumptions · — = data unavailable",
-    ])
+    return "\n".join(
+        [
+            "# GreenOps Weekly Report",
+            "",
+            f"**Report ID:** `{r.report_id}`",
+            f"**Period:** {r.period_start} → {r.period_end}",
+            f"**Region:** {r.region or '*(not specified)*'}",
+            f"**Deployment:** `{r.deployment}` in `{r.namespace}`",
+            f"**Generated:** {r.generated_at}",
+            "",
+            "---",
+            "",
+            "> **Legend:** [M] = measured value · [CALC] = calculated from measured "
+            "inputs · [EST] = estimated using documented assumptions · — = data unavailable",
+        ]
+    )
 
 
 def _carbon_trends(r: WeeklyGreenOpsReport) -> str:
     ct = r.carbon_trends
-    return "\n".join([
-        "## Carbon Intensity Trends",
-        "",
-        "| Metric | Value |",
-        "|---|---|",
-        f"| Average intensity | {_v(ct.avg_intensity_gco2_kwh)} |",
-        f"| Minimum intensity | {_v(ct.min_intensity_gco2_kwh)} |",
-        f"| Maximum intensity | {_v(ct.max_intensity_gco2_kwh)} |",
-        f"| Average renewable share | {_v(ct.avg_renewable_pct)} |",
-        f"| Average fossil share | {_v(ct.avg_fossil_pct)} |",
-        f"| Data availability | {_v(ct.data_availability_pct)} |",
-    ])
+    return "\n".join(
+        [
+            "## Carbon Intensity Trends",
+            "",
+            "| Metric | Value |",
+            "|---|---|",
+            f"| Average intensity | {_v(ct.avg_intensity_gco2_kwh)} |",
+            f"| Minimum intensity | {_v(ct.min_intensity_gco2_kwh)} |",
+            f"| Maximum intensity | {_v(ct.max_intensity_gco2_kwh)} |",
+            f"| Average renewable share | {_v(ct.avg_renewable_pct)} |",
+            f"| Average fossil share | {_v(ct.avg_fossil_pct)} |",
+            f"| Data availability | {_v(ct.data_availability_pct)} |",
+        ]
+    )
 
 
 def _workload_utilization(r: WeeklyGreenOpsReport) -> str:
     wu = r.workload_utilization
-    return "\n".join([
-        "## Kubernetes Workload Utilization",
-        "",
-        "| Metric | Value |",
-        "|---|---|",
-        f"| Average CPU request ratio | {_v(wu.avg_cpu_request_ratio)} |",
-        f"| Average memory request ratio | {_v(wu.avg_memory_request_ratio)} |",
-        f"| Average replica count | {_v(wu.avg_replica_count)} |",
-        f"| Average request rate | {_v(wu.avg_request_rate_rps)} |",
-        f"| Average P99 latency | {_v(wu.avg_p99_latency_seconds, '.3f')} |",
-        f"| Total errors | {_v(wu.total_error_count, '.0f')} |",
-        f"| Average availability | {_v(wu.avg_availability_ratio, '.3f')} |",
-    ])
+    return "\n".join(
+        [
+            "## Kubernetes Workload Utilization",
+            "",
+            "| Metric | Value |",
+            "|---|---|",
+            f"| Average CPU request ratio | {_v(wu.avg_cpu_request_ratio)} |",
+            f"| Average memory request ratio | {_v(wu.avg_memory_request_ratio)} |",
+            f"| Average replica count | {_v(wu.avg_replica_count)} |",
+            f"| Average request rate | {_v(wu.avg_request_rate_rps)} |",
+            f"| Average P99 latency | {_v(wu.avg_p99_latency_seconds, '.3f')} |",
+            f"| Total errors | {_v(wu.total_error_count, '.0f')} |",
+            f"| Average availability | {_v(wu.avg_availability_ratio, '.3f')} |",
+        ]
+    )
 
 
 def _optimization_summary(r: WeeklyGreenOpsReport) -> str:
-    return "\n".join([
-        "## Optimization Summary",
-        "",
-        "| Metric | Count |",
-        "|---|---|",
-        f"| Total optimization cycles | {r.total_optimization_cycles} |",
-        f"| Applied (GitOps change prepared) | {r.total_applied} |",
-        f"| Approved by policy | {r.total_approved} |",
-        f"| Rejected by policy | {r.total_rejected} |",
-        f"| Deferred | {r.total_deferred} |",
-        f"| Rollbacks triggered | {r.total_rollbacks} |",
-        f"| Errors | {r.total_errors} |",
-    ])
+    return "\n".join(
+        [
+            "## Optimization Summary",
+            "",
+            "| Metric | Count |",
+            "|---|---|",
+            f"| Total optimization cycles | {r.total_optimization_cycles} |",
+            f"| Applied (GitOps change prepared) | {r.total_applied} |",
+            f"| Approved by policy | {r.total_approved} |",
+            f"| Rejected by policy | {r.total_rejected} |",
+            f"| Deferred | {r.total_deferred} |",
+            f"| Rollbacks triggered | {r.total_rollbacks} |",
+            f"| Errors | {r.total_errors} |",
+        ]
+    )
 
 
 def _optimization_detail(r: WeeklyGreenOpsReport) -> str:
@@ -190,19 +198,23 @@ def _optimization_detail(r: WeeklyGreenOpsReport) -> str:
             lines.append(f"- **PR:** [{ev.gitops_pr_url}]({ev.gitops_pr_url})")
 
         # Pre/post health comparison
-        if ev.was_applied and any([
-            ev.pre_cpu_ratio, ev.post_cpu_ratio,
-            ev.pre_memory_ratio, ev.post_memory_ratio,
-            ev.pre_request_rate, ev.post_request_rate,
-            ev.pre_p99_latency, ev.post_p99_latency,
-        ]):
+        if ev.was_applied and any(
+            [
+                ev.pre_cpu_ratio,
+                ev.post_cpu_ratio,
+                ev.pre_memory_ratio,
+                ev.post_memory_ratio,
+                ev.pre_request_rate,
+                ev.post_request_rate,
+                ev.pre_p99_latency,
+                ev.post_p99_latency,
+            ]
+        ):
             lines.append("")
             lines.append("  | Metric | Before | After |")
             lines.append("  |---|---|---|")
             if ev.pre_cpu_ratio is not None or ev.post_cpu_ratio is not None:
-                lines.append(
-                    f"  | CPU ratio | {_f(ev.pre_cpu_ratio)} | {_f(ev.post_cpu_ratio)} |"
-                )
+                lines.append(f"  | CPU ratio | {_f(ev.pre_cpu_ratio)} | {_f(ev.post_cpu_ratio)} |")
             if ev.pre_p99_latency is not None or ev.post_p99_latency is not None:
                 lines.append(
                     f"  | P99 latency | {_f(ev.pre_p99_latency, 's')} | "
@@ -210,8 +222,7 @@ def _optimization_detail(r: WeeklyGreenOpsReport) -> str:
                 )
             if ev.pre_memory_ratio is not None or ev.post_memory_ratio is not None:
                 lines.append(
-                    f"  | Memory ratio | {_f(ev.pre_memory_ratio)} | "
-                    f"{_f(ev.post_memory_ratio)} |"
+                    f"  | Memory ratio | {_f(ev.pre_memory_ratio)} | {_f(ev.post_memory_ratio)} |"
                 )
             if ev.pre_request_rate is not None or ev.post_request_rate is not None:
                 lines.append(
@@ -220,8 +231,7 @@ def _optimization_detail(r: WeeklyGreenOpsReport) -> str:
                 )
             if ev.pre_availability is not None or ev.post_availability is not None:
                 lines.append(
-                    f"  | Availability | {_f(ev.pre_availability)} | "
-                    f"{_f(ev.post_availability)} |"
+                    f"  | Availability | {_f(ev.pre_availability)} | {_f(ev.post_availability)} |"
                 )
             if ev.pre_error_rate is not None or ev.post_error_rate is not None:
                 lines.append(
@@ -281,13 +291,15 @@ def _impact_estimates(r: WeeklyGreenOpsReport) -> str:
     # Estimation config
     cfg = r.estimation_config
     if cfg:
-        lines.extend([
-            "",
-            "### Estimation Config",
-            "",
-            "| Parameter | Value |",
-            "|---|---|",
-        ])
+        lines.extend(
+            [
+                "",
+                "### Estimation Config",
+                "",
+                "| Parameter | Value |",
+                "|---|---|",
+            ]
+        )
         for k, v in cfg.items():
             lines.append(f"| `{k}` | {v} |")
 
@@ -307,11 +319,13 @@ def _data_quality(r: WeeklyGreenOpsReport) -> str:
 
 
 def _footer(r: WeeklyGreenOpsReport) -> str:
-    return "\n".join([
-        "---",
-        "",
-        f"*Report generated by GreenOps AI · `{r.report_id}`*",
-    ])
+    return "\n".join(
+        [
+            "---",
+            "",
+            f"*Report generated by GreenOps AI · `{r.report_id}`*",
+        ]
+    )
 
 
 def _f(v: float | None, suffix: str = "") -> str:

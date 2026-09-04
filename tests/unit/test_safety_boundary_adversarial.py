@@ -308,8 +308,13 @@ class TestAdversarialRecommendations:
         assert "CPU utilization" in v.reason
 
     def test_mislabelled_scale_up_hits_scale_down_percentage(self) -> None:
-        rec = _rec(Action.SCALE_UP, current=6, recommended=1,
-                   ops=_healthy_ops(current_replicas=6), validate=False)
+        rec = _rec(
+            Action.SCALE_UP,
+            current=6,
+            recommended=1,
+            ops=_healthy_ops(current_replicas=6),
+            validate=False,
+        )
         v = _validate(rec)
         assert v.status in {ValidationStatus.REQUIRE_REVIEW, ValidationStatus.REJECTED}
         assert "scale-down reduction exceeds" in v.reason
@@ -373,8 +378,12 @@ def _forged_validated(rec: DecisionRecommendation) -> ValidatedRecommendation:
 @pytest.mark.asyncio
 async def test_gitops_blocks_forged_validation_on_unsafe_recommendation(tmp_path: Path) -> None:
     repo = _repo(tmp_path)  # manifest replicas = 3
-    unsafe = _rec(Action.SCALE_DOWN, current=3, recommended=2,
-                  ops=_healthy_ops(current_replicas=3, error_rate_rps=4.0))
+    unsafe = _rec(
+        Action.SCALE_DOWN,
+        current=3,
+        recommended=2,
+        ops=_healthy_ops(current_replicas=3, error_rate_rps=4.0),
+    )
     workflow = GitOpsChangeWorkflow(
         GitOpsSettings(repo_path=repo, base_branch="master"), github=FakeGitHubClient()
     )
@@ -393,8 +402,9 @@ async def test_gitops_grounds_current_replicas_in_the_manifest(tmp_path: Path) -
     scale *up* that contradicts the SCALE_DOWN label. Re-validation grounds
     `current` in the manifest and blocks the contradiction."""
     repo = _repo(tmp_path)  # manifest replicas = 3
-    lying = _rec(Action.SCALE_DOWN, current=10, recommended=9,
-                 ops=_healthy_ops(current_replicas=10))
+    lying = _rec(
+        Action.SCALE_DOWN, current=10, recommended=9, ops=_healthy_ops(current_replicas=10)
+    )
     workflow = GitOpsChangeWorkflow(
         GitOpsSettings(repo_path=repo, base_branch="master"), github=FakeGitHubClient()
     )
@@ -406,12 +416,13 @@ async def test_gitops_grounds_current_replicas_in_the_manifest(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
-async def test_gitops_blocks_oversized_scale_down_against_true_manifest_state(tmp_path: Path) -> None:
+async def test_gitops_blocks_oversized_scale_down_against_true_manifest_state(
+    tmp_path: Path,
+) -> None:
     repo = _repo(tmp_path)  # manifest replicas = 3
     # 3 -> 1 is a 66% reduction; recommendation dresses it up as 4 -> 1 (75%,
     # still over) — either way the manifest-grounded re-validation must not APPROVE.
-    rec = _rec(Action.SCALE_DOWN, current=4, recommended=1,
-               ops=_healthy_ops(current_replicas=4))
+    rec = _rec(Action.SCALE_DOWN, current=4, recommended=1, ops=_healthy_ops(current_replicas=4))
     workflow = GitOpsChangeWorkflow(
         GitOpsSettings(repo_path=repo, base_branch="master"), github=FakeGitHubClient()
     )
@@ -514,7 +525,10 @@ def _git_head_count(repo: Path) -> int:
     return int(
         subprocess.run(
             ["git", "rev-list", "--count", "HEAD"],
-            cwd=repo, check=True, capture_output=True, text=True,
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout.strip()
     )
 

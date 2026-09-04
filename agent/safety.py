@@ -66,7 +66,8 @@ class OptimizationSafetyPolicy:
         return PolicyValidation(
             status=ValidationStatus.APPROVED,
             reason="Recommendation satisfies all deterministic safety safeguards.",
-            approved_for_gitops_change=recommendation.action in {Action.SCALE_DOWN, Action.SCALE_UP},
+            approved_for_gitops_change=recommendation.action
+            in {Action.SCALE_DOWN, Action.SCALE_UP},
             safeguards_triggered=[],
             evaluated_at_seconds=evaluated_at,
         )
@@ -179,14 +180,16 @@ class OptimizationSafetyPolicy:
                 f"below the auto-approval minimum {self.config.min_confidence_for_auto_approval:.2f}"
             )
 
-        if recommendation.action in {Action.SCALE_DOWN, Action.SCALE_UP}:
-            if last_optimization_timestamp_seconds is not None:
-                elapsed = evaluated_at - last_optimization_timestamp_seconds
-                if elapsed < self.config.cooldown_seconds:
-                    reasons.append(
-                        "cooldown period has not elapsed "
-                        f"({elapsed:.0f}s < {self.config.cooldown_seconds:.0f}s)"
-                    )
+        if (
+            recommendation.action in {Action.SCALE_DOWN, Action.SCALE_UP}
+            and last_optimization_timestamp_seconds is not None
+        ):
+            elapsed = evaluated_at - last_optimization_timestamp_seconds
+            if elapsed < self.config.cooldown_seconds:
+                reasons.append(
+                    "cooldown period has not elapsed "
+                    f"({elapsed:.0f}s < {self.config.cooldown_seconds:.0f}s)"
+                )
 
         if self._is_effective_scale_down(recommendation):
             current = recommendation.current_replicas

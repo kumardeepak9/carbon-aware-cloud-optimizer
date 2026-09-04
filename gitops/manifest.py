@@ -74,6 +74,5 @@ def update_kustomize_replica_patch(
             )
 
     raise ValueError(
-        "Could not find a Kustomize /spec/replicas patch for Deployment "
-        f"{deployment_name!r}."
+        f"Could not find a Kustomize /spec/replicas patch for Deployment {deployment_name!r}."
     )

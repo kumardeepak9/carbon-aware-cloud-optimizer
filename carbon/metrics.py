@@ -56,6 +56,8 @@ greenops_carbon_scrape_duration_seconds     Histogram
 
 from __future__ import annotations
 
+from typing import Any
+
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
 # ---------------------------------------------------------------------------
@@ -170,7 +172,7 @@ class CarbonMetrics:
                       registry (useful for unit tests).  If None, the global
                       prometheus_client default registry is used.
         """
-        kwargs: dict = {"registry": registry} if registry is not None else {}
+        kwargs: dict[str, Any] = {"registry": registry} if registry is not None else {}
 
         self.intensity = Gauge(
             "greenops_carbon_intensity_gco2_per_kwh",

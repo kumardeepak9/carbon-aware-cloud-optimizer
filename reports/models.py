@@ -137,12 +137,8 @@ class CarbonTrendSummary:
     max_intensity_gco2_kwh: ReportValue = field(
         default_factory=lambda: ReportValue(None, False, "gCO2eq/kWh")
     )
-    avg_renewable_pct: ReportValue = field(
-        default_factory=lambda: ReportValue(None, False, "%")
-    )
-    avg_fossil_pct: ReportValue = field(
-        default_factory=lambda: ReportValue(None, False, "%")
-    )
+    avg_renewable_pct: ReportValue = field(default_factory=lambda: ReportValue(None, False, "%"))
+    avg_fossil_pct: ReportValue = field(default_factory=lambda: ReportValue(None, False, "%"))
     data_availability_pct: ReportValue = field(
         default_factory=lambda: ReportValue(None, False, "%")
     )

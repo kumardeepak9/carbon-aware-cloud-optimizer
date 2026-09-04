@@ -54,9 +54,21 @@ def has_time_expression(text: str) -> bool:
     """True if the text contains anything this module would try to resolve."""
     lowered = text.lower()
     keywords = (
-        "last ", "past ", "previous ", "yesterday", "today", "this week",
-        "this month", "since ", " to ", "between ", "on 20", "week", "month",
-        "recent", "so far",
+        "last ",
+        "past ",
+        "previous ",
+        "yesterday",
+        "today",
+        "this week",
+        "this month",
+        "since ",
+        " to ",
+        "between ",
+        "on 20",
+        "week",
+        "month",
+        "recent",
+        "so far",
     )
     return bool(_ISO_DATE.search(text)) or any(k in lowered for k in keywords)
 
@@ -135,7 +147,9 @@ def _explicit_range(text: str, now: datetime) -> TimeRange | None:
     dates = _ISO_DATE.findall(text)
     lowered = text.lower()
     connective = (
-        " to " in lowered or "between" in lowered or ".." in text
+        " to " in lowered
+        or "between" in lowered
+        or ".." in text
         or re.search(r"\d\s*-\s*\d{4}-", text) is not None
     )
     if len(dates) >= 2 and connective:
@@ -173,7 +187,12 @@ def _single_day(text: str, lowered: str, now: datetime) -> TimeRange | None:
         return TimeRange(start=start, end=now, label="today")
     # bare date with no "on"/range connective
     solo = _ISO_DATE.findall(text)
-    if len(solo) == 1 and " to " not in lowered and "since" not in lowered and "between" not in lowered:
+    if (
+        len(solo) == 1
+        and " to " not in lowered
+        and "since" not in lowered
+        and "between" not in lowered
+    ):
         start = _parse_iso(*solo[0])
         return TimeRange(start=start, end=start + timedelta(days=1), label=str(start.date()))
     return None

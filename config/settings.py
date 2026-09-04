@@ -64,9 +64,7 @@ def _validate_electricity_maps_zone(value: object) -> str:
     if len(zone) > 64:
         raise ValueError("ELECTRICITY_MAPS_ZONE is too long")
     if not _ELECTRICITY_MAPS_ZONE_PATTERN.fullmatch(zone):
-        raise ValueError(
-            "ELECTRICITY_MAPS_ZONE must contain only letters, numbers, and hyphens"
-        )
+        raise ValueError("ELECTRICITY_MAPS_ZONE must contain only letters, numbers, and hyphens")
     return zone
 
 
@@ -117,8 +115,7 @@ class ElectricityMapsSettings(BaseSettings):
     def api_key_must_be_real(cls, v: SecretStr) -> SecretStr:
         if _looks_like_placeholder(v.get_secret_value()):
             raise ValueError(
-                "ELECTRICITY_MAPS_API_KEY is unset or still a placeholder — "
-                "set a real key"
+                "ELECTRICITY_MAPS_API_KEY is unset or still a placeholder — set a real key"
             )
         return v
 
@@ -306,9 +303,7 @@ class GitOpsSettings(BaseSettings):
         if self.github_repository and not _GITHUB_REPOSITORY_PATTERN.fullmatch(
             self.github_repository
         ):
-            raise ValueError(
-                "GREENOPS_GITOPS_GITHUB_REPOSITORY must be in owner/name format"
-            )
+            raise ValueError("GREENOPS_GITOPS_GITHUB_REPOSITORY must be in owner/name format")
         parsed_api_url = urlparse(self.github_api_url)
         if parsed_api_url.scheme != "https" or not parsed_api_url.netloc:
             raise ValueError("GREENOPS_GITOPS_GITHUB_API_URL must be an HTTPS URL")
@@ -387,9 +382,7 @@ def assert_safe_for_environment() -> None:
     Prometheus / GitOps — it does NOT require the Electricity Maps key, so the
     read-only agent, health, gitops and chat CLIs can call it safely.
     """
-    problems = _environment_safety_problems(
-        AppSettings(), PrometheusSettings(), GitOpsSettings()
-    )
+    problems = _environment_safety_problems(AppSettings(), PrometheusSettings(), GitOpsSettings())
     if problems:
         raise ConfigurationError(
             "Unsafe configuration for APP_ENV=production:\n  - " + "\n  - ".join(problems)

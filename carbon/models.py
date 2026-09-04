@@ -133,15 +133,9 @@ class PowerBreakdownResponse(BaseModel):
 
     zone: str
     datetime_utc: datetime = Field(alias="datetime")
-    renewable_percentage: float | None = Field(
-        default=None, alias="renewablePercentage"
-    )
-    fossil_fuel_percentage: float | None = Field(
-        default=None, alias="fossilFuelPercentage"
-    )
-    low_carbon_percentage: float | None = Field(
-        default=None, alias="lowCarbonPercentage"
-    )
+    renewable_percentage: float | None = Field(default=None, alias="renewablePercentage")
+    fossil_fuel_percentage: float | None = Field(default=None, alias="fossilFuelPercentage")
+    low_carbon_percentage: float | None = Field(default=None, alias="lowCarbonPercentage")
 
     model_config = {"populate_by_name": True}
 
@@ -150,7 +144,9 @@ class PowerBreakdownResponse(BaseModel):
     def validate_zone(cls, v: Any) -> str:
         return validate_electricity_maps_zone(v)
 
-    @field_validator("renewable_percentage", "fossil_fuel_percentage", "low_carbon_percentage", mode="before")
+    @field_validator(
+        "renewable_percentage", "fossil_fuel_percentage", "low_carbon_percentage", mode="before"
+    )
     @classmethod
     def coerce_nullable_float(cls, v: Any) -> float | None:
         """Return None for null API values; cast numbers to float."""
@@ -189,9 +185,7 @@ class ElectricityMapsData(BaseModel):
     """
 
     zone: str = Field(description="Electricity Maps zone identifier (e.g. 'DE', 'FR').")
-    carbon_intensity_gco2_per_kwh: float = Field(
-        description="Grid carbon intensity in gCO2eq/kWh."
-    )
+    carbon_intensity_gco2_per_kwh: float = Field(description="Grid carbon intensity in gCO2eq/kWh.")
     renewable_percentage: float | None = Field(
         default=None,
         description="Percentage of generation from renewable sources (0–100).",

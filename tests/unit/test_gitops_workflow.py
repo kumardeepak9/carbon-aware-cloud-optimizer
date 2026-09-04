@@ -135,7 +135,9 @@ async def test_prepares_branch_commit_and_pr_metadata_for_approved_change(tmp_pa
     result = await workflow.prepare_change(validated)
 
     assert result.status is GitOpsChangeStatus.PREPARED
-    assert result.branch_name == "greenops/scale-down-greenops-demo-workload-to-2-low-load-high-carbon"
+    assert (
+        result.branch_name == "greenops/scale-down-greenops-demo-workload-to-2-low-load-high-carbon"
+    )
     assert result.changed_files == ["k8s/overlays/prod/kustomization.yaml"]
     assert result.commit_sha is not None
     assert result.pull_request_title is not None
@@ -148,7 +150,9 @@ async def test_prepares_branch_commit_and_pr_metadata_for_approved_change(tmp_pa
 @pytest.mark.asyncio
 async def test_blocks_when_policy_validation_is_not_approved(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    recommendation = DecisionPolicy().recommend(_observation(carbon_data_available=0.0), now=1_000.0)
+    recommendation = DecisionPolicy().recommend(
+        _observation(carbon_data_available=0.0), now=1_000.0
+    )
     validation = OptimizationSafetyPolicy().validate(recommendation, now=1_000.0)
     workflow = GitOpsChangeWorkflow(GitOpsSettings(repo_path=repo, base_branch="master"))
 
@@ -322,11 +326,7 @@ async def test_github_token_is_redacted_from_workflow_logs(tmp_path: Path) -> No
 
     logged = " ".join(
         [str(arg) for call in warning.call_args_list for arg in call.args]
-        + [
-            str(value)
-            for call in warning.call_args_list
-            for value in call.kwargs.values()
-        ]
+        + [str(value) for call in warning.call_args_list for value in call.kwargs.values()]
     )
     assert result.status is GitOpsChangeStatus.PR_FAILED
     assert secret not in logged

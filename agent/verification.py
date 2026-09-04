@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -53,6 +54,8 @@ from gitops.models import GitOpsChangeResult, GitOpsChangeStatus
 from gitops.workflow import GitOpsChangeWorkflow
 
 log = get_logger(__name__)
+
+MetricCollectorFn = Callable[[], Awaitable[dict[str, float]]]
 
 
 # ---------------------------------------------------------------------------
@@ -381,8 +384,7 @@ class OptimizationVerifier:
             if getattr(post_snapshot, f, None) is not None
         )
         missing_required = [
-            f for f in self._REQUIRED_POST_CHANGE_FIELDS
-            if getattr(post_snapshot, f, None) is None
+            f for f in self._REQUIRED_POST_CHANGE_FIELDS if getattr(post_snapshot, f, None) is None
         ]
 
         lifecycle.emit(
@@ -491,9 +493,7 @@ class OptimizationVerifier:
         if violations:
             outcome = VerificationOutcome.ROLLBACK_REQUIRED
             reason = (
-                "Hard safety thresholds violated after optimization: "
-                + "; ".join(violations)
-                + "."
+                "Hard safety thresholds violated after optimization: " + "; ".join(violations) + "."
             )
         elif degradations:
             outcome = VerificationOutcome.DEGRADED
@@ -587,9 +587,7 @@ class OptimizationVerifier:
 
         p99 = post.http_p99_latency_seconds
         if p99 is not None and p99 > cfg.rollback_on_p99_latency_above:
-            violations.append(
-                f"P99 latency {p99:.3f}s > SLA {cfg.rollback_on_p99_latency_above}s"
-            )
+            violations.append(f"P99 latency {p99:.3f}s > SLA {cfg.rollback_on_p99_latency_above}s")
 
         avail = post.availability_ratio
         if avail is not None and avail < cfg.rollback_on_availability_below:
@@ -598,10 +596,7 @@ class OptimizationVerifier:
             )
 
         restarts = post.pod_restart_rate
-        if (
-            restarts is not None
-            and restarts > cfg.rollback_on_restart_rate_above
-        ):
+        if restarts is not None and restarts > cfg.rollback_on_restart_rate_above:
             violations.append(
                 f"Pod restart rate {restarts:.6f}/s > threshold {cfg.rollback_on_restart_rate_above}/s"
             )
@@ -676,9 +671,7 @@ class OptimizationVerifier:
 
         restore_replicas = int(pre_replicas)
         rollback_action = (
-            Action.SCALE_UP
-            if (post_replicas or 0) < restore_replicas
-            else Action.SCALE_DOWN
+            Action.SCALE_UP if (post_replicas or 0) < restore_replicas else Action.SCALE_DOWN
         )
 
         lifecycle.emit(
@@ -735,16 +728,16 @@ class OptimizationVerifier:
         emergency_config = OptimizationSafetyConfig(
             min_replicas=1,
             max_replicas=10,
-            cpu_safety_threshold=0.95,          # relaxed for emergency
+            cpu_safety_threshold=0.95,  # relaxed for emergency
             latency_sla_threshold_seconds=2.0,  # relaxed for emergency
-            require_all_replicas_ready=False,    # can't require health during degradation
-            reject_on_http_errors=False,         # errors are why we're rolling back
-            reject_on_restarts=False,            # restarts are why we're rolling back
-            max_scale_down_percentage=1.0,       # allow full restoration
-            cooldown_seconds=0.0,               # waived for emergency
+            require_all_replicas_ready=False,  # can't require health during degradation
+            reject_on_http_errors=False,  # errors are why we're rolling back
+            reject_on_restarts=False,  # restarts are why we're rolling back
+            max_scale_down_percentage=1.0,  # allow full restoration
+            cooldown_seconds=0.0,  # waived for emergency
             max_carbon_data_age_seconds=3600.0,  # relaxed; carbon data may be old
             require_health_evidence_for_scale_down=False,  # degraded telemetry must not block a rollback
-            min_confidence_for_auto_approval=0.0,          # deterministic rollback, not a heuristic
+            min_confidence_for_auto_approval=0.0,  # deterministic rollback, not a heuristic
         )
         rollback_validation = OptimizationSafetyPolicy(emergency_config).validate(
             rollback_rec,
@@ -778,8 +771,11 @@ class OptimizationVerifier:
             validation=rollback_validation,
         )
 
+        assert self._gitops is not None
         try:
-            rollback_gitops: GitOpsChangeResult = await self._gitops.prepare_change(rollback_validated)
+            rollback_gitops: GitOpsChangeResult = await self._gitops.prepare_change(
+                rollback_validated
+            )
         except Exception as exc:  # noqa: BLE001
             lifecycle.emit(
                 LifecycleStage.VERIFICATION,
@@ -833,4 +829,3 @@ class OptimizationVerifier:
 
 # Callers supply this as an async callable returning {metric_name: float}.
 # Typical implementation wraps PrometheusClient.collect_agent_observation().
-MetricCollectorFn = "Callable[[], Awaitable[dict[str, float]]]"

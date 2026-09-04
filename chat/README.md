@@ -53,7 +53,7 @@ from chat import GreenOpsChat, DecisionHistoryStore, HistoryRetriever
 store = DecisionHistoryStore("./reports/decision-history.jsonl")
 answer = await GreenOpsChat(HistoryRetriever(store)).ask("what did you do yesterday?")
 print(answer.text)
-for e in answer.evidence:            # provenance for every claim
+for e in answer.evidence:  # provenance for every claim
     print(e.source, e.ref, e.detail)
 ```
 

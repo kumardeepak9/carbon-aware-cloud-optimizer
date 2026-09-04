@@ -114,9 +114,7 @@ class TestInstantQuery:
     @respx.mock
     async def test_successful_instant_query(self) -> None:
         payload = _vector_response({"namespace": "greenops"}, 3.0)
-        respx.get(f"{PROMETHEUS_BASE}/api/v1/query").mock(
-            return_value=Response(200, json=payload)
-        )
+        respx.get(f"{PROMETHEUS_BASE}/api/v1/query").mock(return_value=Response(200, json=payload))
 
         async with PrometheusClient(base_url=PROMETHEUS_BASE) as client:
             result = await client.instant_query("kube_deployment_spec_replicas")
@@ -129,9 +127,7 @@ class TestInstantQuery:
     @respx.mock
     async def test_query_error_raises_prometheus_query_error(self) -> None:
         payload = _error_response("bad_data", "invalid PromQL")
-        respx.get(f"{PROMETHEUS_BASE}/api/v1/query").mock(
-            return_value=Response(200, json=payload)
-        )
+        respx.get(f"{PROMETHEUS_BASE}/api/v1/query").mock(return_value=Response(200, json=payload))
 
         async with PrometheusClient(base_url=PROMETHEUS_BASE) as client:
             with pytest.raises(PrometheusQueryError) as exc_info:
@@ -260,9 +256,7 @@ class TestGreenOpsQueries:
         inputs = queries.all_decision_inputs()
         assert len(inputs) > 0
 
-    def test_all_decision_inputs_have_required_fields(
-        self, queries: GreenOpsQueries
-    ) -> None:
+    def test_all_decision_inputs_have_required_fields(self, queries: GreenOpsQueries) -> None:
         for spec in queries.all_decision_inputs():
             assert spec.name, f"Missing name on spec: {spec}"
             assert spec.expr, f"Missing expr on spec: {spec}"
@@ -325,9 +319,7 @@ class TestGreenOpsQueries:
 class TestCollectAgentObservation:
     @pytest.mark.asyncio
     @respx.mock
-    async def test_partial_collection_on_empty_results(
-        self, queries: GreenOpsQueries
-    ) -> None:
+    async def test_partial_collection_on_empty_results(self, queries: GreenOpsQueries) -> None:
         """
         If some queries return empty results, the observation should still
         be returned with only the successful snapshots.
@@ -347,14 +339,10 @@ class TestCollectAgentObservation:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_full_collection_with_all_metrics(
-        self, queries: GreenOpsQueries
-    ) -> None:
+    async def test_full_collection_with_all_metrics(self, queries: GreenOpsQueries) -> None:
         """Happy path: all queries return one sample each."""
         payload = _vector_response({"namespace": "greenops"}, 42.0)
-        respx.get(f"{PROMETHEUS_BASE}/api/v1/query").mock(
-            return_value=Response(200, json=payload)
-        )
+        respx.get(f"{PROMETHEUS_BASE}/api/v1/query").mock(return_value=Response(200, json=payload))
 
         async with PrometheusClient(base_url=PROMETHEUS_BASE) as client:
             observation = await client.collect_agent_observation(queries)

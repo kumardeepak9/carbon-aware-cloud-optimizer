@@ -19,13 +19,15 @@ Usage
     uvicorn app.main:app --host 0.0.0.0 --port 8080
 """
 
+# mypy: disable-error-code="untyped-decorator"
 from __future__ import annotations
 
 import hashlib
 import os
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Literal
+from typing import Any, Literal
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -119,7 +121,7 @@ async def prometheus_middleware(request: Request, call_next):  # type: ignore[no
 
 
 @app.get("/", response_class=JSONResponse, include_in_schema=False)
-async def root() -> dict:
+async def root() -> dict[str, Any]:
     """Human-readable status response."""
     return {
         "app": APP_NAME,
@@ -142,7 +144,7 @@ async def root() -> dict:
     description="Returns 200 as long as the process is alive. Used by Kubernetes liveness probe.",
     tags=["Probes"],
 )
-async def health() -> dict:
+async def health() -> dict[str, str]:
     """
     Liveness probe.
 
@@ -158,7 +160,7 @@ async def health() -> dict:
     description="Returns 200 when ready to serve traffic; 503 during startup/drain.",
     tags=["Probes"],
 )
-async def ready() -> dict:
+async def ready() -> dict[str, str]:
     """
     Readiness probe.
 
@@ -204,13 +206,13 @@ _INTENSITY_ITERATIONS: dict[WorkIntensity, int] = {
     "/work",
     summary="Simulate CPU-bound work",
     description=(
-        "Accepts a JSON body `{\"intensity\": \"low\"|\"medium\"|\"high\"}`. "
+        'Accepts a JSON body `{"intensity": "low"|"medium"|"high"}`. '
         "Performs hash iterations to simulate CPU load. "
         "Use for load testing and to generate realistic metrics."
     ),
     tags=["Load Testing"],
 )
-async def work(intensity: WorkIntensity = "medium") -> dict:
+async def work(intensity: WorkIntensity = "medium") -> dict[str, Any]:
     """
     Simulate CPU-bound work.
 

@@ -120,9 +120,7 @@ def make_lifecycle(
     lc.rollback_prepared = rollback
     lc.rollback_branch = "greenops/rollback" if rollback else None
     lc.rollback_pr_url = "https://github.com/test/pr/99" if rollback else None
-    lc.safety_thresholds_violated = (
-        ["P99 latency 1.5s > SLA 1.0s"] if rollback else []
-    )
+    lc.safety_thresholds_violated = ["P99 latency 1.5s > SLA 1.0s"] if rollback else []
 
     # Emit some audit events
     lc.emit(LifecycleStage.OBSERVATION, "observation.collected", {})
@@ -262,9 +260,7 @@ class TestOptimizationEventRecord:
         assert ev.had_rollback is True
 
     def test_to_dict_includes_computed(self):
-        ev = OptimizationEventRecord(
-            pre_replicas=3, post_replicas=1, gitops_status="PR_CREATED"
-        )
+        ev = OptimizationEventRecord(pre_replicas=3, post_replicas=1, gitops_status="PR_CREATED")
         d = ev.to_dict()
         assert d["was_applied"] is True
         assert d["replica_delta"] == -2
@@ -281,8 +277,11 @@ class TestWeeklyReportGeneratorComplete:
     def test_complete_report_structure(self, full_carbon_summary, full_workload_summary):
         lc1 = make_lifecycle(final_outcome="SUCCESS", duration_hours=4.0)
         lc2 = make_lifecycle(
-            action="SCALE_DOWN", current_replicas=4, recommended_replicas=2,
-            final_outcome="DEGRADED", verification_outcome="DEGRADED",
+            action="SCALE_DOWN",
+            current_replicas=4,
+            recommended_replicas=2,
+            final_outcome="DEGRADED",
+            verification_outcome="DEGRADED",
             duration_hours=2.0,
         )
 
@@ -359,7 +358,8 @@ class TestWeeklyReportGeneratorComplete:
 
     def test_impact_estimates_with_carbon(self, full_carbon_summary):
         lc = make_lifecycle(
-            current_replicas=3, recommended_replicas=1,
+            current_replicas=3,
+            recommended_replicas=1,
             duration_hours=4.0,
         )
         gen = WeeklyReportGenerator(
@@ -498,10 +498,17 @@ class TestWeeklyReportGeneratorPartial:
 
         assert report.carbon_trends.avg_intensity_gco2_kwh.provenance is ValueProvenance.MEASURED
         assert report.carbon_trends.min_intensity_gco2_kwh.provenance is ValueProvenance.UNAVAILABLE
-        assert report.workload_utilization.avg_cpu_request_ratio.provenance is ValueProvenance.MEASURED
-        assert report.workload_utilization.avg_memory_request_ratio.provenance is ValueProvenance.UNAVAILABLE
+        assert (
+            report.workload_utilization.avg_cpu_request_ratio.provenance is ValueProvenance.MEASURED
+        )
+        assert (
+            report.workload_utilization.avg_memory_request_ratio.provenance
+            is ValueProvenance.UNAVAILABLE
+        )
         assert report.impact_estimates.estimated_co2_grams_avoided.available is False
-        assert any("Missing values are reported as unavailable" in n for n in report.data_quality_notes)
+        assert any(
+            "Missing values are reported as unavailable" in n for n in report.data_quality_notes
+        )
 
     def test_rejected_lifecycle_counted(self):
         lc = make_lifecycle(
@@ -614,7 +621,9 @@ class TestImpactEstimationChain:
             default_cpu_per_replica_cores=0.5,
         )
         lc = make_lifecycle(
-            current_replicas=3, recommended_replicas=1, duration_hours=2.0,
+            current_replicas=3,
+            recommended_replicas=1,
+            duration_hours=2.0,
         )
         gen = WeeklyReportGenerator(
             lifecycles=[lc],
@@ -644,10 +653,14 @@ class TestImpactEstimationChain:
 
     def test_multiple_lifecycles_summed(self, full_carbon_summary):
         lc1 = make_lifecycle(
-            current_replicas=3, recommended_replicas=1, duration_hours=2.0,
+            current_replicas=3,
+            recommended_replicas=1,
+            duration_hours=2.0,
         )
         lc2 = make_lifecycle(
-            current_replicas=4, recommended_replicas=2, duration_hours=3.0,
+            current_replicas=4,
+            recommended_replicas=2,
+            duration_hours=3.0,
         )
         gen = WeeklyReportGenerator(
             lifecycles=[lc1, lc2],
@@ -693,7 +706,7 @@ class TestMarkdownRenderer:
         report = gen.generate(period_start=PERIOD_START, period_end=PERIOD_END)
         md = render_markdown(report)
 
-        assert "[M]" in md   # measured values
+        assert "[M]" in md  # measured values
         assert "[CALC]" in md  # calculated values
         assert "[EST]" in md  # estimated values
 
@@ -810,7 +823,9 @@ class TestDataQualityNotes:
     def test_notes_for_no_scale_downs(self, full_carbon_summary, full_workload_summary):
         # Scale-up only — no savings possible
         lc = make_lifecycle(
-            action="SCALE_UP", current_replicas=1, recommended_replicas=3,
+            action="SCALE_UP",
+            current_replicas=1,
+            recommended_replicas=3,
         )
         gen = WeeklyReportGenerator(
             lifecycles=[lc],

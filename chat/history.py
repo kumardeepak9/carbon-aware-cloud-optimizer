@@ -190,7 +190,9 @@ class DecisionHistoryStore:
                 records.append(DecisionRecord.model_validate_json(raw))
             except (ValueError, TypeError) as exc:
                 skipped += 1
-                log.warning("chat.history.corrupt_line", path=str(self._path), line=lineno, error=str(exc))
+                log.warning(
+                    "chat.history.corrupt_line", path=str(self._path), line=lineno, error=str(exc)
+                )
         records.sort(key=lambda r: r.started_at)
         return records, skipped
 

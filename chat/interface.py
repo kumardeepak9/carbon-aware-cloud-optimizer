@@ -103,12 +103,18 @@ class GreenOpsChat:
     def _classify(q: str) -> QueryIntent:
         s = q.lower()
 
-        if re.search(r"\breject|\brejected|\bblocked by|\bpolicy (?:block|refus|den|reject)|"
-                     r"not approved|require[sd]? review|denied", s):
+        if re.search(
+            r"\breject|\brejected|\bblocked by|\bpolicy (?:block|refus|den|reject)|"
+            r"not approved|require[sd]? review|denied",
+            s,
+        ):
             return QueryIntent.REJECTED_BY_POLICY
 
-        scaled_down = re.search(r"scale[ -]?down|scaled[ -]?down|downscale|reduce.*replica|"
-                                r"scal\w+ .*\bdown\b|fewer replica", s)
+        scaled_down = re.search(
+            r"scale[ -]?down|scaled[ -]?down|downscale|reduce.*replica|"
+            r"scal\w+ .*\bdown\b|fewer replica",
+            s,
+        )
         if scaled_down and ("why" in s or "reason" in s or "explain" in s or "because" in s):
             return QueryIntent.WHY_SCALED_DOWN
 
@@ -120,8 +126,11 @@ class GreenOpsChat:
         if "carbon" in s or "gco2" in s or "grid intensity" in s or "emissions intensity" in s:
             return QueryIntent.CARBON_AT_TIME
 
-        if re.search(r"\bdecisions?\b|\brecommendations?\b|what did you (?:do|decide)|"
-                     r"what actions|what happened|optimi[sz]ation|\bactivity\b|\bcycles?\b", s):
+        if re.search(
+            r"\bdecisions?\b|\brecommendations?\b|what did you (?:do|decide)|"
+            r"what actions|what happened|optimi[sz]ation|\bactivity\b|\bcycles?\b",
+            s,
+        ):
             return QueryIntent.DECISIONS_IN_RANGE
 
         if scaled_down:  # "why" was implicit
@@ -133,7 +142,9 @@ class GreenOpsChat:
     # Handlers
     # ------------------------------------------------------------------
 
-    def _no_history(self, intent: QueryIntent, tr: TimeRange, sl: HistorySlice) -> GroundedAnswer | None:
+    def _no_history(
+        self, intent: QueryIntent, tr: TimeRange, sl: HistorySlice
+    ) -> GroundedAnswer | None:
         """Shared guard: store missing entirely."""
         if not sl.store_exists:
             return GroundedAnswer(
@@ -244,7 +255,7 @@ class GreenOpsChat:
         text = (
             f"On {_ts(r.started_at)} the agent recommended SCALE_DOWN "
             f"{_num(r.current_replicas)}→{_num(r.recommended_replicas)} replicas.{extra}\n"
-            f"Reason (verbatim): \"{r.reason}\"\n"
+            f'Reason (verbatim): "{r.reason}"\n'
             f"Decision basis: {r.decision_basis or 'n/a'}; "
             f"confidence {_num(r.confidence, '{:.2f}')}.\n"
             f"Carbon intensity at decision time: {carbon}{region}, {renewable}.\n"
@@ -274,19 +285,24 @@ class GreenOpsChat:
         if anchored:
             lines = []
             for r in anchored:
-                avail = "" if r.carbon_data_available is not False else " (agent flagged data_available=false)"
+                avail = (
+                    ""
+                    if r.carbon_data_available is not False
+                    else " (agent flagged data_available=false)"
+                )
                 lines.append(
                     f"- {_ts(r.started_at)} [{r.action}]: "
                     f"{r.carbon_intensity_gco2_kwh:.0f} gCO2eq/kWh"
-                    + (f", {r.renewable_percentage:.0f}% renewable" if r.renewable_percentage is not None else "")
+                    + (
+                        f", {r.renewable_percentage:.0f}% renewable"
+                        if r.renewable_percentage is not None
+                        else ""
+                    )
                     + (f", region {r.carbon_region}" if r.carbon_region else "")
                     + avail
                 )
                 evidence.append(_record_evidence(r, source="carbon_context"))
-            text = (
-                f"Carbon intensity recorded with decisions in {tr.label}:\n"
-                + "\n".join(lines)
-            )
+            text = f"Carbon intensity recorded with decisions in {tr.label}:\n" + "\n".join(lines)
             # Optionally corroborate with Prometheus.
             if self._metrics is not None:
                 mw = await self._metrics.carbon_intensity(tr)
@@ -297,8 +313,11 @@ class GreenOpsChat:
                     )
                     evidence.append(_metric_evidence(mw))
             return GroundedAnswer(
-                text=text, intent=QueryIntent.CARBON_AT_TIME, evidence=evidence,
-                time_range=tr, data_complete=sl.complete,
+                text=text,
+                intent=QueryIntent.CARBON_AT_TIME,
+                evidence=evidence,
+                time_range=tr,
+                data_complete=sl.complete,
             )
 
         # No decision carried a carbon value — fall back to Prometheus for the range.
@@ -441,7 +460,7 @@ class GreenOpsChat:
                 parts.append(
                     f"- {_ts(r.started_at)}: attempted {r.action} "
                     f"{_num(r.current_replicas)}→{_num(r.recommended_replicas)}. "
-                    f"Policy reason: \"{r.policy_reason or '(none)'}\". "
+                    f'Policy reason: "{r.policy_reason or "(none)"}". '
                     f"Safeguards: {', '.join(r.safeguards_triggered) or 'none listed'}."
                 )
                 evidence.append(_record_evidence(r))
@@ -449,7 +468,7 @@ class GreenOpsChat:
             parts.append(f"{len(review)} recommendation(s) held for REQUIRE_REVIEW:")
             for r in review:
                 parts.append(
-                    f"- {_ts(r.started_at)}: {r.action}. Reason: \"{r.policy_reason or '(none)'}\"."
+                    f'- {_ts(r.started_at)}: {r.action}. Reason: "{r.policy_reason or "(none)"}".'
                 )
                 evidence.append(_record_evidence(r))
 

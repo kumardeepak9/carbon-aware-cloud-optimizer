@@ -86,31 +86,41 @@ class DecisionPolicy:
             missing.append("carbon_data_available")
         current_time = time.time() if now is None else now
         if environmental.data_timestamp_seconds is not None and (
-            current_time - environmental.data_timestamp_seconds > self.config.max_carbon_data_age_seconds
+            current_time - environmental.data_timestamp_seconds
+            > self.config.max_carbon_data_age_seconds
         ):
             missing.append("fresh_carbon_data")
         missing = sorted(set(missing))
         if missing:
             return self._result(
-                Action.DEFER, operational, environmental,
+                Action.DEFER,
+                operational,
+                environmental,
                 "Insufficient or stale monitoring data; no scaling recommendation is safe.",
-                missing=missing, basis="missing_data",
+                missing=missing,
+                basis="missing_data",
             )
 
         guards = self._reliability_guards(operational)
         if guards:
             return self._result(
-                Action.SCALE_UP, operational, environmental,
+                Action.SCALE_UP,
+                operational,
+                environmental,
                 "Application reliability guard triggered: " + ", ".join(guards) + ".",
-                recommended=self._increase(operational.current_replicas), guards=guards,
+                recommended=self._increase(operational.current_replicas),
+                guards=guards,
                 basis="reliability_priority",
             )
 
         if self._is_high_load(operational):
             return self._result(
-                Action.SCALE_UP, operational, environmental,
+                Action.SCALE_UP,
+                operational,
+                environmental,
                 "Workload demand or resource pressure is high; reliability takes priority over carbon intensity.",
-                recommended=self._increase(operational.current_replicas), basis="high_operational_load",
+                recommended=self._increase(operational.current_replicas),
+                basis="high_operational_load",
             )
 
         if (
@@ -119,15 +129,21 @@ class DecisionPolicy:
             and environmental.carbon_intensity_gco2_kwh >= self.config.high_carbon_intensity
         ):
             return self._result(
-                Action.SCALE_DOWN, operational, environmental,
+                Action.SCALE_DOWN,
+                operational,
+                environmental,
                 "Low workload demand during high grid carbon intensity; a one-replica reduction is safe to consider.",
-                recommended=self._decrease(operational.current_replicas), basis="low_load_high_carbon",
+                recommended=self._decrease(operational.current_replicas),
+                basis="low_load_high_carbon",
             )
 
         return self._result(
-            Action.KEEP, operational, environmental,
+            Action.KEEP,
+            operational,
+            environmental,
             "No reliability pressure or safe high-carbon, low-load reduction opportunity was detected.",
-            recommended=operational.current_replicas, basis="steady_state",
+            recommended=operational.current_replicas,
+            basis="steady_state",
         )
 
     @staticmethod
@@ -162,7 +178,10 @@ class DecisionPolicy:
             guards.append("availability_below_target")
         if ctx.error_rate_rps is not None and ctx.error_rate_rps > self.config.high_error_rate_rps:
             guards.append("http_errors")
-        if ctx.p99_latency_seconds is not None and ctx.p99_latency_seconds > self.config.high_p99_latency_seconds:
+        if (
+            ctx.p99_latency_seconds is not None
+            and ctx.p99_latency_seconds > self.config.high_p99_latency_seconds
+        ):
             guards.append("high_p99_latency")
         if ctx.restart_rate is not None and ctx.restart_rate > 0:
             guards.append("pod_restarts")
@@ -203,12 +222,16 @@ class DecisionPolicy:
         basis: str,
     ) -> DecisionRecommendation:
         return DecisionRecommendation(
-            action=action, current_replicas=operational.current_replicas,
-            recommended_replicas=recommended, reason=reason,
-            environmental_context=environmental, operational_context=operational,
+            action=action,
+            current_replicas=operational.current_replicas,
+            recommended_replicas=recommended,
+            reason=reason,
+            environmental_context=environmental,
+            operational_context=operational,
             metadata=DecisionMetadata(
                 confidence=0.0 if missing else 0.95,
-                missing_signals=missing or [], safety_guards_triggered=guards or [],
+                missing_signals=missing or [],
+                safety_guards_triggered=guards or [],
                 decision_basis=basis,
             ),
         )

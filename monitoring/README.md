@@ -239,7 +239,7 @@ from carbon import CarbonMetricsExporter
 
 exporter = CarbonMetricsExporter(
     api_key=settings.electricity_maps.api_key,  # from ELECTRICITY_MAPS_API_KEY
-    zone=settings.electricity_maps.zone,        # from ELECTRICITY_MAPS_ZONE
+    zone=settings.electricity_maps.zone,  # from ELECTRICITY_MAPS_ZONE
 )
 await exporter.open()
 # On each poll interval:

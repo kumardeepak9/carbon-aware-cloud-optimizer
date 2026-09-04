@@ -225,7 +225,10 @@ async def test_complete_feedback_loop_successful_scale_down() -> None:
     assert lifecycle.post_snapshot_json["cpu_request_ratio"] == after["cpu_request_ratio"]
     assert lifecycle.post_snapshot_json["memory_request_ratio"] == after["memory_request_ratio"]
     assert lifecycle.post_snapshot_json["http_request_rate_rps"] == after["http_request_rate_rps"]
-    assert lifecycle.post_snapshot_json["http_p99_latency_seconds"] == after["http_p99_latency_seconds"]
+    assert (
+        lifecycle.post_snapshot_json["http_p99_latency_seconds"]
+        == after["http_p99_latency_seconds"]
+    )
     assert lifecycle.post_snapshot_json["availability_ratio"] == after["pod_availability_ratio"]
     assert lifecycle.metric_deltas_json["replica_count_desired"]["after"] == 2.0
     assert lifecycle.rollback_prepared is False
@@ -267,12 +270,17 @@ async def test_complete_feedback_loop_harmful_scale_down_prepares_gitops_rollbac
     assert rollback.current_replicas == 2
     assert rollback.recommended_replicas == 3
     assert rollback.metadata.decision_basis == "emergency-rollback"
-    assert rollback.operational_context.memory_request_ratio == harmful_after["memory_request_ratio"]
+    assert (
+        rollback.operational_context.memory_request_ratio == harmful_after["memory_request_ratio"]
+    )
     assert rollback.operational_context.request_rate_rps == harmful_after["http_request_rate_rps"]
     assert lifecycle.verification_outcome is VerificationOutcome.ROLLBACK_REQUIRED
     assert lifecycle.final_outcome == "ROLLBACK_PREPARED"
     assert lifecycle.rollback_prepared is True
-    assert lifecycle.rollback_branch == "greenops/scale-up-greenops-demo-workload-to-3-emergency-rollback"
+    assert (
+        lifecycle.rollback_branch
+        == "greenops/scale-up-greenops-demo-workload-to-3-emergency-rollback"
+    )
     assert lifecycle.rollback_commit_sha == "rollback-sha"
     assert lifecycle.safety_thresholds_violated
 

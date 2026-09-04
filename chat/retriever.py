@@ -69,7 +69,8 @@ class HistoryRetriever:
     def slice(self, time_range: TimeRange) -> HistorySlice:
         records, skipped = self._store.load()
         in_window = [
-            r for r in records
+            r
+            for r in records
             if time_range.start.timestamp() <= r.started_at < time_range.end.timestamp()
         ]
         return HistorySlice(
@@ -160,11 +161,15 @@ class MetricRetriever:
             resp = await self._client.range_query(expr, start=start, end=end, step=step)
             matrix = resp.as_matrix()
         except EmptyResultError:
-            return MetricWindow(metric, expr, available=False, reason="Prometheus returned no samples")
+            return MetricWindow(
+                metric, expr, available=False, reason="Prometheus returned no samples"
+            )
         except PrometheusError as exc:
             return MetricWindow(metric, expr, available=False, reason=f"Prometheus error: {exc}")
         except (ValueError, TypeError) as exc:
-            return MetricWindow(metric, expr, available=False, reason=f"unreadable Prometheus response: {exc}")
+            return MetricWindow(
+                metric, expr, available=False, reason=f"unreadable Prometheus response: {exc}"
+            )
 
         points: list[tuple[float, float]] = []
         for series in matrix.result:
@@ -176,7 +181,9 @@ class MetricRetriever:
                 points.append((float(ts), val))
         points.sort(key=lambda p: p[0])
         if not points:
-            return MetricWindow(metric, expr, available=False, reason="Prometheus returned an empty series")
+            return MetricWindow(
+                metric, expr, available=False, reason="Prometheus returned an empty series"
+            )
         return MetricWindow(metric, expr, available=True, points=points)
 
     async def carbon_intensity(self, time_range: TimeRange, *, step: str = "5m") -> MetricWindow:
@@ -205,5 +212,7 @@ class MetricRetriever:
             "carbon_intensity_gco2_kwh": self._queries.carbon_intensity_gco2_kwh,
         }.get(metric)
         if builder is None:
-            return MetricWindow(metric, "", available=False, reason=f"no query defined for {metric!r}")
+            return MetricWindow(
+                metric, "", available=False, reason=f"no query defined for {metric!r}"
+            )
         return await self._range(metric, builder().expr, start, end, step)

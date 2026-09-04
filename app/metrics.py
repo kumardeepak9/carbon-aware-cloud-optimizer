@@ -40,7 +40,7 @@ HTTP_REQUEST_DURATION_SECONDS = Histogram(
 WORK_REQUESTS_TOTAL = Counter(
     name="greenops_demo_work_requests_total",
     documentation="Total number of /work requests processed.",
-    labelnames=["intensity"],   # low | medium | high
+    labelnames=["intensity"],  # low | medium | high
 )
 
 WORK_DURATION_SECONDS = Histogram(

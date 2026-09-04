@@ -166,12 +166,12 @@ class TestTimeParsing:
     @pytest.mark.parametrize(
         "text",
         [
-            "from 2026-08-10 to 2026-08-01",   # inverted
+            "from 2026-08-10 to 2026-08-01",  # inverted
             "between 2020-01-01 and 2019-01-01",
-            "on 2026-13-40",                    # not a real date
-            "in the last 0 days",               # non-positive
-            "from 2099-01-01 to 2099-03-01",    # entirely future
-            "since 1900-01-01",                 # absurdly far back
+            "on 2026-13-40",  # not a real date
+            "in the last 0 days",  # non-positive
+            "from 2099-01-01 to 2099-03-01",  # entirely future
+            "since 1900-01-01",  # absurdly far back
         ],
     )
     def test_invalid_ranges_raise(self, text):
@@ -212,7 +212,8 @@ class TestGroundedResponses:
         assert "417" in a.text  # the value stored on lc-scale-down-1
         # every intensity in the answer must be carried by a cited record
         cited_intensities = {
-            e.detail["carbon_intensity_gco2_kwh"] for e in a.evidence
+            e.detail["carbon_intensity_gco2_kwh"]
+            for e in a.evidence
             if e.detail.get("carbon_intensity_gco2_kwh") is not None
         }
         assert cited_intensities == {417.0, 395.0, 110.0}
@@ -357,7 +358,9 @@ class TestUnavailableMetrics:
     async def test_carbon_from_prometheus_when_unreachable(self, store):
         store.append(_rec(carbon_intensity_gco2_kwh=None))
         respx.get(f"{PROM}/api/v1/query_range").mock(
-            return_value=Response(503, json={"status": "error", "errorType": "unavailable", "error": "down"})
+            return_value=Response(
+                503, json={"status": "error", "errorType": "unavailable", "error": "down"}
+            )
         )
         from monitoring.client import PrometheusClient
 
@@ -389,7 +392,9 @@ class TestUnavailableMetrics:
         from monitoring.client import PrometheusClient
 
         async with PrometheusClient(base_url=PROM, max_retries=0) as client:
-            a = await _ask(store, "what was the carbon intensity last week", MetricRetriever(client))
+            a = await _ask(
+                store, "what was the carbon intensity last week", MetricRetriever(client)
+            )
         assert a.answered and a.data_complete
         assert "330" in a.text  # mean of 300 and 360, from the mocked series
         assert a.evidence[0].source == "prometheus"
@@ -549,7 +554,12 @@ class TestPersistence:
         assert r.was_applied and not r.was_rejected
 
     def test_record_lifecycle_appends(self, store):
-        lc = {"lifecycle_id": "lc-1", "started_at": 1.0, "recommendation_json": {"action": "KEEP", "reason": "steady"}, "validation_json": {"status": "APPROVED"}}
+        lc = {
+            "lifecycle_id": "lc-1",
+            "started_at": 1.0,
+            "recommendation_json": {"action": "KEEP", "reason": "steady"},
+            "validation_json": {"status": "APPROVED"},
+        }
         record_lifecycle(store, lc)
         record_lifecycle(store, {**lc, "lifecycle_id": "lc-2"})
         recs = store.all()
