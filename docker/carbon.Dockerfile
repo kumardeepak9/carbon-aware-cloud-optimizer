@@ -23,15 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Carbon exporter shares the main project requirements minus FastAPI/uvicorn
-COPY pyproject.toml ./
+COPY carbon/requirements.txt ./requirements.txt
 RUN pip install --upgrade pip \
-    && pip install --no-cache-dir --prefix=/install \
-        "pydantic>=2.7" \
-        "pydantic-settings>=2.3" \
-        "httpx>=0.27" \
-        "prometheus-client>=0.20" \
-        "structlog>=24.1" \
-        "anyio>=4.4"
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ---------------------------------------------------------------------------
 # Stage 2: production runtime

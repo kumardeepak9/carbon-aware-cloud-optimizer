@@ -1,0 +1,45 @@
+# Version control and local metadata
+.git
+.gitignore
+.agents
+.codex
+.openai
+
+# Python caches and test/build outputs
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Local environments and editor state
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+
+# Repository content not copied by Dockerfiles
+tests/
+docs/
+grafana/
+prometheus/
+k8s/
+argocd/
+reports/
+chat/
+monitoring/
+
+# Runtime outputs and transient files
+*.log
+*.tmp
+tmp/

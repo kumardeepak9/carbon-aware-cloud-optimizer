@@ -1,0 +1,9 @@
+# GreenOps Carbon Exporter — Runtime Dependencies
+# Pinned for reproducible Docker image builds.
+
+pydantic==2.13.5
+pydantic-settings==2.15.0
+httpx==0.28.1
+prometheus-client==0.26.0
+structlog==26.1.0
+anyio==4.15.1
