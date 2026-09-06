@@ -48,10 +48,10 @@ def test_missing_data_recommendation_is_rejected() -> None:
 def test_stale_carbon_data_is_rejected() -> None:
     recommendation = DecisionPolicy().recommend(
         _observation(carbon_last_update_timestamp_seconds=0.0),
-        now=1_000.0,
+        now=100_000.0,  # far past max_carbon_data_age_seconds
     )
 
-    validation = OptimizationSafetyPolicy().validate(recommendation, now=1_000.0)
+    validation = OptimizationSafetyPolicy().validate(recommendation, now=100_000.0)
 
     assert validation.status is ValidationStatus.REJECTED
     assert "carbon data is stale" in validation.reason

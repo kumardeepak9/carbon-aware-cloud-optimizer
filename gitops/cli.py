@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 
-from agent.safety import OptimizationSafetyConfig, OptimizationSafetyPolicy
 from agent.service import GreenOpsDecisionAgent
 from config import bootstrap
 from config.settings import AgentSettings, GitOpsSettings, KubernetesSettings, PrometheusSettings
@@ -23,20 +22,8 @@ async def run_once() -> None:
         namespace=kubernetes.namespace,
         deployment=gitops.deployment_name,
     )
-    safety_config = OptimizationSafetyConfig(
-        min_replicas=agent.min_replicas,
-        max_replicas=agent.max_replicas,
-        cpu_safety_threshold=agent.cpu_safety_threshold,
-        latency_sla_threshold_seconds=agent.latency_sla_threshold_seconds,
-        max_scale_down_percentage=agent.max_scale_down_percentage,
-        cooldown_seconds=agent.optimization_cooldown_seconds,
-        max_carbon_data_age_seconds=agent.max_carbon_data_age_seconds,
-    )
     async with PrometheusClient(base_url=prometheus.api_url) as client:
-        validated = await GreenOpsDecisionAgent(
-            client,
-            safety_policy=OptimizationSafetyPolicy(safety_config),
-        ).recommend(queries)
+        validated = await GreenOpsDecisionAgent.from_settings(client, agent).recommend(queries)
     result = await GitOpsChangeWorkflow(gitops).prepare_change(validated)
     print(result.model_dump_json(indent=2))
 

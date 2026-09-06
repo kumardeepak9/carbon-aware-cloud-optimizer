@@ -214,7 +214,7 @@ class TestHardRejectionSafeguards:
         assert "timestamp is missing" in v.reason
 
     def test_stale_carbon_data(self) -> None:
-        rec = _rec(env=_fresh_env(data_timestamp_seconds=NOW - 5_000.0))
+        rec = _rec(env=_fresh_env(data_timestamp_seconds=NOW - 20_000.0))
         v = _validate(rec)
         assert v.status is ValidationStatus.REJECTED
         assert "stale" in v.reason

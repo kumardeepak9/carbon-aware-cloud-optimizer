@@ -126,14 +126,19 @@ groups:
             The GreenOps agent should be scaling down workloads.
 
       - alert: CarbonDataStale
+        # Electricity Maps stamps its hourly `latest` datapoint at the bucket
+        # start, so a fresh value is normally 30-70 min old. This threshold
+        # (90 min) matches AGENT_MAX_CARBON_DATA_AGE_SECONDS — it fires only when
+        # the exporter has genuinely stopped receiving updates.
         expr: |
-          (time() - greenops_carbon_last_update_timestamp_seconds) > 600
-        for: 5m
+          (time() - greenops_carbon_last_update_timestamp_seconds) > 5400
+        for: 10m
         labels:
           severity: warning
           team: greenops
         annotations:
-          summary: "Carbon intensity data is stale (>10 minutes old)"
+          summary: "Carbon intensity data is stale (>90 minutes old)"
           description: |
-            The carbon intensity signal has not been updated for more than 10 minutes.
-            Agent decisions are being made on stale data.
+            The carbon intensity signal has not advanced for more than 90 minutes
+            — the carbon exporter or the Electricity Maps feed is likely down.
+            Agent optimization decisions are deferring on stale data.

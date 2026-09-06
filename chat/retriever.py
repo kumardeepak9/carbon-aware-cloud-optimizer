@@ -186,6 +186,12 @@ class MetricRetriever:
             )
         return MetricWindow(metric, expr, available=True, points=points)
 
+    async def series(
+        self, metric: str, expr: str, time_range: TimeRange, *, step: str = "5m"
+    ) -> MetricWindow:
+        """Range-query any PromQL expression over a window (for report summaries)."""
+        return await self._range(metric, expr, time_range.start, time_range.end, step)
+
     async def carbon_intensity(self, time_range: TimeRange, *, step: str = "5m") -> MetricWindow:
         spec = self._queries.carbon_intensity_gco2_kwh()
         return await self._range(

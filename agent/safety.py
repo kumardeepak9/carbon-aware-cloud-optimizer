@@ -27,7 +27,7 @@ class OptimizationSafetyConfig:
     reject_on_restarts: bool = True
     max_scale_down_percentage: float = 0.50
     cooldown_seconds: float = 900.0
-    max_carbon_data_age_seconds: float = 600.0
+    max_carbon_data_age_seconds: float = 5400.0  # see AGENT_MAX_CARBON_DATA_AGE_SECONDS
     # A scale-down must be backed by workload-health evidence. When every health
     # signal below is absent, the recommendation is rejected rather than assumed
     # safe (absence of evidence is not evidence of safety).

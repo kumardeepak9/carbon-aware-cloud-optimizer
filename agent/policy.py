@@ -29,7 +29,9 @@ class PolicyConfig:
     low_request_rate_rps: float = 2.0
     high_error_rate_rps: float = 0.0
     high_p99_latency_seconds: float = 1.0
-    max_carbon_data_age_seconds: float = 600.0
+    # Electricity Maps' hourly `latest` datapoint is stamped at the bucket start,
+    # so a "fresh" value is still routinely 30-70 min old. See AGENT_MAX_CARBON_DATA_AGE_SECONDS.
+    max_carbon_data_age_seconds: float = 5400.0
 
 
 class DecisionPolicy:

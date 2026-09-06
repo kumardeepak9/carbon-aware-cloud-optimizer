@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from agent.lifecycle import OptimizationLifecycle
 from reports.models import (
@@ -43,6 +43,59 @@ from reports.models import (
     WeeklyGreenOpsReport,
     WorkloadUtilizationSummary,
 )
+
+if TYPE_CHECKING:
+    from chat.history import DecisionRecord
+
+
+def event_from_decision_record(rec: DecisionRecord) -> OptimizationEventRecord:
+    """Adapt a persisted ``chat.history.DecisionRecord`` to a report event.
+
+    The decision-history store keeps a flat projection of each lifecycle; the
+    weekly report needs the same facts in ``OptimizationEventRecord`` shape.
+    Nothing is inferred — every value is copied straight across.
+    """
+    pre = rec.pre_snapshot or {}
+    post = rec.post_snapshot or {}
+
+    def _f(d: dict[str, Any], key: str) -> float | None:
+        v = d.get(key)
+        return float(v) if isinstance(v, (int, float)) else None
+
+    return OptimizationEventRecord(
+        lifecycle_id=rec.lifecycle_id,
+        started_at=rec.started_at,
+        completed_at=rec.completed_at,
+        action=rec.action,
+        reason=rec.reason,
+        decision_basis=rec.decision_basis,
+        confidence=rec.confidence,
+        pre_replicas=_first_int(pre.get("replica_count_desired"), rec.current_replicas),
+        post_replicas=_int_or_none(post.get("replica_count_desired")),
+        recommended_replicas=rec.recommended_replicas,
+        policy_status=rec.policy_status,
+        policy_reason=rec.policy_reason,
+        safeguards_triggered=list(rec.safeguards_triggered),
+        gitops_status=rec.gitops_status,
+        gitops_branch=rec.gitops_branch,
+        gitops_pr_url=rec.gitops_pr_url,
+        verification_outcome=rec.verification_outcome,
+        verification_reason=rec.verification_reason,
+        pre_cpu_ratio=_f(pre, "cpu_request_ratio"),
+        post_cpu_ratio=_f(post, "cpu_request_ratio"),
+        pre_memory_ratio=_f(pre, "memory_request_ratio"),
+        post_memory_ratio=_f(post, "memory_request_ratio"),
+        pre_request_rate=_f(pre, "http_request_rate_rps"),
+        post_request_rate=_f(post, "http_request_rate_rps"),
+        pre_p99_latency=_f(pre, "http_p99_latency_seconds"),
+        post_p99_latency=_f(post, "http_p99_latency_seconds"),
+        pre_availability=_f(pre, "availability_ratio"),
+        post_availability=_f(post, "availability_ratio"),
+        pre_error_rate=_f(pre, "http_error_rate_rps"),
+        post_error_rate=_f(post, "http_error_rate_rps"),
+        rollback_prepared=rec.rollback_prepared,
+        final_outcome=rec.final_outcome,
+    )
 
 
 class WeeklyReportGenerator:
@@ -66,6 +119,7 @@ class WeeklyReportGenerator:
         self,
         *,
         lifecycles: list[OptimizationLifecycle] | None = None,
+        events: list[OptimizationEventRecord] | None = None,
         carbon_summary: dict[str, float | None] | None = None,
         workload_summary: dict[str, float | None] | None = None,
         estimation_config: ReportEstimationConfig | None = None,
@@ -74,6 +128,9 @@ class WeeklyReportGenerator:
         deployment: str = "greenops-demo-workload",
     ) -> None:
         self._lifecycles = lifecycles or []
+        # Pre-built event records (e.g. from the persisted decision-history
+        # store via event_from_decision_record). Merged with any lifecycles.
+        self._events = events or []
         self._carbon = carbon_summary or {}
         self._workload = workload_summary or {}
         self._config = estimation_config or ReportEstimationConfig()
@@ -90,7 +147,10 @@ class WeeklyReportGenerator:
         """Generate the complete weekly report."""
         notes: list[str] = []
 
-        events = [self._lifecycle_to_event(lc) for lc in self._lifecycles]
+        events = [
+            *self._events,
+            *(self._lifecycle_to_event(lc) for lc in self._lifecycles),
+        ]
         carbon = self._build_carbon_trends(notes)
         workload = self._build_workload_utilization(notes)
         counts = self._compute_counts(events)

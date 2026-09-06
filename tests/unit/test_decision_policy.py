@@ -114,7 +114,7 @@ def test_missing_prometheus_data_defers_without_a_replica_target() -> None:
 def test_stale_metrics_defer_without_a_replica_target() -> None:
     decision = DecisionPolicy().recommend(
         _observation(carbon_last_update_timestamp_seconds=100.0),
-        now=1_000.0,
+        now=100_000.0,  # ~28 h after the datapoint — well past max_carbon_data_age_seconds
     )
 
     assert decision.action is Action.DEFER

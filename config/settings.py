@@ -216,9 +216,16 @@ class AgentSettings(BaseSettings):
         description="Minimum time between optimization actions.",
     )
     max_carbon_data_age_seconds: int = Field(
-        default=600,
+        default=5400,
         ge=0,
-        description="Maximum acceptable carbon data age for optimization decisions.",
+        description=(
+            "Maximum acceptable carbon data age for optimization decisions. "
+            "Electricity Maps' `latest` datapoint is stamped at the start of its "
+            "hourly bucket for estimated zones, so it is routinely 30-70 min old "
+            "even when fresh; a sub-hour threshold makes the agent defer "
+            "permanently. 90 min covers a full bucket plus provider refresh lag "
+            "while still catching a genuinely stalled feed."
+        ),
     )
 
     @model_validator(mode="after")
