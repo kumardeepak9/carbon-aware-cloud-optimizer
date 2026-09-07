@@ -283,8 +283,9 @@ class OptimizationVerifier:
       4. Classifies the outcome (SUCCESS / DEGRADED / ROLLBACK_REQUIRED / INCONCLUSIVE).
       5. If ROLLBACK_REQUIRED: prepares a restoration change through GitOpsChangeWorkflow.
 
-    ``metric_collector`` is a callable ``async (metric_names) -> dict[name, float]``
-    so the verifier is fully testable without a real Prometheus instance.
+    ``metric_collector`` is a zero-argument async callable returning
+    ``{metric_name: value}``, so the verifier is fully testable without a real
+    Prometheus instance.
     """
 
     _REQUIRED_POST_CHANGE_FIELDS = (
@@ -821,11 +822,3 @@ class OptimizationVerifier:
                 },
             }
         )
-
-
-# ---------------------------------------------------------------------------
-# Type alias for the metric collector dependency
-# ---------------------------------------------------------------------------
-
-# Callers supply this as an async callable returning {metric_name: float}.
-# Typical implementation wraps PrometheusClient.collect_agent_observation().

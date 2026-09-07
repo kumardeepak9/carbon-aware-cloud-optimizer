@@ -56,9 +56,7 @@ class GreenOpsDecisionAgent:
         self._safety_policy = safety_policy or OptimizationSafetyPolicy()
 
     @classmethod
-    def from_settings(
-        cls, client: PrometheusClient, agent: AgentSettings
-    ) -> GreenOpsDecisionAgent:
+    def from_settings(cls, client: PrometheusClient, agent: AgentSettings) -> GreenOpsDecisionAgent:
         """Construct with both policies configured from ``AGENT_*`` settings."""
         return cls(
             client,

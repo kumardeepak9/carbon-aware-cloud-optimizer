@@ -258,7 +258,7 @@ class GitOpsSettings(BaseSettings):
     )
     manifest_path: Path = Field(
         default=Path("k8s/overlays/prod/kustomization.yaml"),
-        description="Only this desired-state file may be modified by Phase 8.",
+        description="Only this desired-state file may be modified by the GitOps workflow.",
     )
     deployment_name: str = Field(
         default="greenops-demo-workload",

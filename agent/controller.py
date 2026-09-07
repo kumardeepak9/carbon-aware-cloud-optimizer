@@ -9,7 +9,7 @@ Orchestrates the complete seven-stage optimization lifecycle:
 Each stage emits structured audit events to the OptimizationLifecycle, creating
 a permanent, traceable record from carbon observation to verification outcome.
 
-Deployment path (unchanged from Phase 8):
+Deployment path:
 
     AI Agent → OptimizationSafetyPolicy → GitOpsChangeWorkflow
         → GitHub PR (human review) → Argo CD sync → Kubernetes
@@ -39,7 +39,7 @@ from agent.verification import (
     WorkloadSnapshot,
 )
 from config import get_logger
-from gitops.models import GitOpsChangeStatus
+from gitops.models import GitOpsChangeResult, GitOpsChangeStatus
 from gitops.workflow import GitOpsChangeWorkflow
 from monitoring.client import PrometheusClient
 from monitoring.queries import GreenOpsQueries
@@ -143,7 +143,7 @@ class ClosedLoopController:
             # Record optimization timestamp for cooldown tracking
             self.last_optimization_timestamp = time.time()
 
-            await self._stage_deployment_wait(lifecycle, sleep_for_stabilization)
+            await self._stage_deployment_wait(lifecycle)
 
             verification = await self._stage_verification(
                 lifecycle,
@@ -300,7 +300,7 @@ class ClosedLoopController:
         self,
         lifecycle: OptimizationLifecycle,
         validated: ValidatedRecommendation,
-    ) -> tuple[Any, WorkloadSnapshot]:
+    ) -> tuple[GitOpsChangeResult | None, WorkloadSnapshot]:
         """
         Collect pre-change snapshot, then prepare the GitOps branch + PR.
 
@@ -383,7 +383,6 @@ class ClosedLoopController:
     async def _stage_deployment_wait(
         self,
         lifecycle: OptimizationLifecycle,
-        sleep: bool,
     ) -> None:
         """
         Note: In production, Argo CD syncs after a human merges the PR.

@@ -95,13 +95,13 @@ AGENT_OBSERVATION_COMPLETENESS = Gauge(
 # ---------------------------------------------------------------------------
 AGENT_GITOPS_COMMITS_TOTAL = Counter(
     name="greenops_agent_gitops_commits_total",
-    documentation="Reserved for a future approved control phase; Phase 6 never updates it.",
+    documentation="Total review-first GitOps commits prepared by the agent.",
     labelnames=["status"],  # success | error
 )
 
 
 # ---------------------------------------------------------------------------
-# Convenience class for injection / mocking in tests
+# Convenience class for dependency injection
 # ---------------------------------------------------------------------------
 
 
@@ -110,7 +110,8 @@ class AgentMetrics:
     Facade that groups all agent metric objects.
 
     Inject this into agent components instead of importing module-level
-    metrics directly — makes unit testing (with mock metrics) straightforward.
+    metrics directly; tests can pass an isolated facade or registry-backed
+    metric set without patching globals.
     """
 
     info = AGENT_INFO

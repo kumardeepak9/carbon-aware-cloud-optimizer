@@ -49,7 +49,7 @@ class GitOpsChangeWorkflow:
         self,
         validated: ValidatedRecommendation,
     ) -> GitOpsChangeResult:
-        """Prepare a GitOps change only when Phase 7 validation approves it."""
+        """Prepare a GitOps change only when safety validation approves it."""
         audit = self._audit_metadata(validated)
         try:
             return await self._prepare_change(validated, audit)

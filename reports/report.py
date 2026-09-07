@@ -65,7 +65,9 @@ async def _load_metric_summaries(
 
         ci_avg, ci_min, ci_max = await agg("carbon_intensity", q.carbon_intensity_gco2_kwh().expr)
         carbon["avg_intensity"], carbon["min_intensity"], carbon["max_intensity"] = (
-            ci_avg, ci_min, ci_max,
+            ci_avg,
+            ci_min,
+            ci_max,
         )
         ren_avg, _, _ = await agg("renewable", q.renewable_percentage().expr)
         carbon["avg_renewable_pct"] = ren_avg

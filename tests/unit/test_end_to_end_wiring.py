@@ -219,10 +219,15 @@ async def test_report_metric_summaries_aggregate_live_shape() -> None:
     }
     with respx.mock:
         respx.get("http://prom-y:9090/-/healthy").mock(return_value=Response(200))
-        respx.get("http://prom-y:9090/api/v1/query_range").mock(return_value=Response(200, json=matrix))
+        respx.get("http://prom-y:9090/api/v1/query_range").mock(
+            return_value=Response(200, json=matrix)
+        )
         carbon, workload = await _load_metric_summaries(
-            "http://prom-y:9090", "greenops", "greenops-demo-workload",
-            _dt(time.time() - 7 * 86400), _dt(time.time()),
+            "http://prom-y:9090",
+            "greenops",
+            "greenops-demo-workload",
+            _dt(time.time() - 7 * 86400),
+            _dt(time.time()),
         )
     assert carbon["avg_intensity"] == 420.0  # mean of 400 and 440
     assert carbon["min_intensity"] == 400.0 and carbon["max_intensity"] == 440.0
