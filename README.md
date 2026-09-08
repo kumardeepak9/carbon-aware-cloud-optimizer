@@ -120,8 +120,6 @@ ELECTRICITY_MAPS_API_KEY=<your-key>
 GRAFANA_ADMIN_PASSWORD=<your-local-password>
 ```
 
-Never commit `.env` or any file containing real secrets. The repository tracks `.env.example` only, with empty secret fields.
-
 ## Running the Project
 
 Install development dependencies:
@@ -157,6 +155,8 @@ Restart only Prometheus after changing scrape configuration:
 ```bash
 docker compose restart prometheus
 ```
+Then run the Phython Script in scripts folder
+python3 chat_agent.py
 
 ## Accessing Services
 
@@ -168,13 +168,6 @@ docker compose restart prometheus
 - kube-state-metrics, when port-forwarded: http://localhost:18080/metrics
 - node-exporter, when port-forwarded: http://localhost:19100/metrics
 - Argo CD UI, when port-forwarded: https://localhost:8080
-
-The interactive chat helper runs in the terminal:
-
-```bash
-make chat-agent
-make chat-agent ARGS="whats the current status?"
-```
 
 ## Useful Validation Commands
 
