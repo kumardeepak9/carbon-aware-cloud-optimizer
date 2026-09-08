@@ -31,32 +31,6 @@ The project connects these implemented pieces:
 
 ![GreenOps AI architecture flow](Images/greenops-ai-architecture-flow.png)
 
-```mermaid
-flowchart TD
-    electricity[Electricity Maps] --> carbon[Carbon/Grid Data Service]
-    carbon --> prometheus[Prometheus]
-
-    k8s[Kubernetes] --> ksm[kube-state-metrics / node-exporter]
-    k8s --> app[Demo Workload Metrics]
-    ksm --> prometheus
-    app --> prometheus
-
-    prometheus --> agent[AI Agent]
-    agent --> policy[Safety Policy Engine]
-    policy --> gitops[GitHub GitOps]
-    gitops --> argocd[Argo CD]
-    argocd --> k8s
-
-    k8s --> verify[Post-change Verification]
-    verify --> prometheus
-
-    prometheus --> grafana[Grafana Dashboards]
-    prometheus --> report[Weekly GreenOps Report]
-    history[Decision History] --> report
-    prometheus --> chat[AI Chat]
-    history --> chat
-```
-
 ## How It Works
 
 GreenOps AI follows a closed feedback loop:
@@ -124,13 +98,12 @@ Images/       Project screenshots and architecture image assets
 
 ## Prerequisites
 
-- Git
-- Python 3.11 or newer
+
+- Python 3.11+
 - Docker and Docker Compose
 - kubectl
 - kind, for the local Kubernetes demo
 - An Electricity Maps API key
-- Optional: Argo CD CLI for manual sync/status commands
 
 ## Environment Configuration
 
@@ -257,18 +230,6 @@ The provisioned GreenOps dashboards show:
 - P50 and P99 latency.
 - Replica count over time and carbon/replica correlation.
 
-## Results
-
-![Grafana carbon signal replica correlation](Images/grafana-carbon-signal-replica-correlation.png)
-
-![Grafana carbon history workload health](Images/grafana-carbon-history-workload-health.png)
-
-![Grafana application performance latency](Images/grafana-application-performance-latency.png)
-
-![Chat agent UK carbon status response](Images/chat-agent-uk-carbon-status-response.png)
-
-![Chat agent Frankfurt carbon status response](Images/chat-agent-frankfurt-carbon-status-response.png)
-
 ## Safety Model
 
 AI recommendations do not bypass deterministic policy validation. The policy engine rejects or requires review when required signals are missing, carbon data is unavailable or stale, replica targets violate configured bounds, CPU utilization is above the scale-down threshold, P99 latency is at or above the SLA threshold, all replicas are not ready, HTTP errors are present, pod restarts are present, cooldown has not elapsed, or the requested scale-down exceeds the configured percentage.
@@ -313,14 +274,6 @@ Historical answers are grounded in `REPORT_DECISION_HISTORY_PATH`. If no decisio
 
 ## Testing
 
-Run the standard checks:
-
-```bash
-make lint
-make type-check
-make test
-```
-
 Additional validation:
 
 ```bash
@@ -330,6 +283,18 @@ kubectl kustomize k8s/overlays/dev
 kubectl kustomize k8s/overlays/prod
 kubectl kustomize k8s/monitoring
 ```
+## Results
+
+![Grafana carbon signal replica correlation](Images/grafana-carbon-signal-replica-correlation.png)
+
+![Grafana carbon history workload health](Images/grafana-carbon-history-workload-health.png)
+
+![Grafana application performance latency](Images/grafana-application-performance-latency.png)
+
+![Chat agent UK carbon status response](Images/chat-agent-uk-carbon-status-response.png)
+
+![Chat agent Frankfurt carbon status response](Images/chat-agent-frankfurt-carbon-status-response.png)
+
 
 ## Security
 
