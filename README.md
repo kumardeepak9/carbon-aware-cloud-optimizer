@@ -29,6 +29,8 @@ The project connects these implemented pieces:
 
 ## Architecture
 
+![GreenOps AI architecture flow](Images/greenops-ai-architecture-flow.png)
+
 ```mermaid
 flowchart TD
     electricity[Electricity Maps] --> carbon[Carbon/Grid Data Service]
@@ -254,6 +256,18 @@ The provisioned GreenOps dashboards show:
 - Application request rate.
 - P50 and P99 latency.
 - Replica count over time and carbon/replica correlation.
+
+## Results
+
+![Grafana carbon signal replica correlation](Images/grafana-carbon-signal-replica-correlation.png)
+
+![Grafana carbon history workload health](Images/grafana-carbon-history-workload-health.png)
+
+![Grafana application performance latency](Images/grafana-application-performance-latency.png)
+
+![Chat agent UK carbon status response](Images/chat-agent-uk-carbon-status-response.png)
+
+![Chat agent Frankfurt carbon status response](Images/chat-agent-frankfurt-carbon-status-response.png)
 
 ## Safety Model
 
