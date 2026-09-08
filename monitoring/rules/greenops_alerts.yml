@@ -1,9 +1,4 @@
-# =============================================================================
-# Prometheus Alert Rules — GreenOps
-# =============================================================================
-# Alerts are fired to Alertmanager (and optionally Grafana On-Call).
-# Severity levels: critical > warning > info
-# =============================================================================
+
 groups:
 
   - name: greenops.workload.alerts
@@ -126,10 +121,6 @@ groups:
             The GreenOps agent should be scaling down workloads.
 
       - alert: CarbonDataStale
-        # Electricity Maps stamps its hourly `latest` datapoint at the bucket
-        # start, so a fresh value is normally 30-70 min old. This threshold
-        # (90 min) matches AGENT_MAX_CARBON_DATA_AGE_SECONDS — it fires only when
-        # the exporter has genuinely stopped receiving updates.
         expr: |
           (time() - greenops_carbon_last_update_timestamp_seconds) > 5400
         for: 10m

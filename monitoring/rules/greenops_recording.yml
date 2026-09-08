@@ -1,13 +1,4 @@
-# =============================================================================
-# Prometheus Recording Rules — GreenOps
-# =============================================================================
-# Recording rules pre-compute expensive or frequently-used PromQL expressions
-# into new time-series.  This reduces query latency in Grafana dashboards and
-# ensures the AI Agent always reads from low-cost series.
-#
-# Naming convention: <namespace>:<metric>:<aggregation>
-# Reference: https://prometheus.io/docs/practices/rules/
-# =============================================================================
+
 groups:
 
   - name: greenops.workload.recording

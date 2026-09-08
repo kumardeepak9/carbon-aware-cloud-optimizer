@@ -1,9 +1,6 @@
-# =============================================================================
+# ==========================================
 # Namespace — greenops
-# =============================================================================
-# Isolates all GreenOps workloads from other cluster tenants.
-# Labels enable future NetworkPolicy and LimitRange targeting.
-# =============================================================================
+
 apiVersion: v1
 kind: Namespace
 metadata:

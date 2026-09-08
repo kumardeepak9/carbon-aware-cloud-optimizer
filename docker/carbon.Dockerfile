@@ -1,13 +1,3 @@
-# =============================================================================
-# GreenOps Carbon Exporter — Dockerfile
-# =============================================================================
-# Standalone container that runs carbon/server.py:
-#   - Polls Electricity Maps API at AGENT_POLL_INTERVAL_SECONDS intervals
-#   - Serves greenops_carbon_* Prometheus metrics on port 8002
-#
-# Security: runs as non-root uid 1001, read-only root filesystem.
-# =============================================================================
-
 # ---------------------------------------------------------------------------
 # Stage 1: dependency builder
 # ---------------------------------------------------------------------------
@@ -34,7 +24,7 @@ FROM python:3.11-slim AS runtime
 
 LABEL org.opencontainers.image.title="greenops-carbon-exporter"
 LABEL org.opencontainers.image.description="GreenOps AI — Electricity Maps → Prometheus carbon metrics exporter."
-LABEL org.opencontainers.image.source="https://github.com/your-org/carbon-aware-cloud-optimizer"
+LABEL org.opencontainers.image.source="https://github.com/kumardeepak9/carbon-aware-cloud-optimizer"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

@@ -21,7 +21,7 @@ from chat.interface import GreenOpsChat
 from chat.models import GroundedAnswer
 from chat.retriever import HistoryRetriever, MetricRetriever
 from config import bootstrap
-from config.settings import PrometheusSettings, ReportingSettings
+from config.settings import KubernetesSettings, PrometheusSettings, ReportingSettings
 from monitoring.client import PrometheusClient
 from monitoring.queries import GreenOpsQueries
 
@@ -53,7 +53,8 @@ async def _run(args: argparse.Namespace) -> int:
     prom = PrometheusClient(base_url=PrometheusSettings().api_url)
     await prom.open()
     try:
-        metrics = MetricRetriever(prom, GreenOpsQueries())
+        kubernetes = KubernetesSettings()
+        metrics = MetricRetriever(prom, GreenOpsQueries(namespace=kubernetes.namespace))
         answer = await GreenOpsChat(history, metrics).ask(question)
     finally:
         await prom.close()

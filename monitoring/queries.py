@@ -73,11 +73,6 @@ class GreenOpsQueries:
     ) -> None:
         self._ns = namespace
         self._dep = deployment
-        # cAdvisor/kubelet expose the *container* name from the Pod spec on the
-        # `container` label — for this workload that is `workload`, NOT the
-        # Deployment name (see k8s/base/deployment.yaml). Filtering on the wrong
-        # value makes every container_* query return an empty result, which the
-        # agent's policy treats as missing data and defers on.
         self._container = container
 
     @property

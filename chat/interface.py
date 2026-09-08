@@ -19,8 +19,8 @@ from chat.timeparse import InvalidDateRangeError, parse_time_range
 _CAPABILITIES = (
     "I can answer questions about: decisions the agent made in a period, "
     "why it scaled the workload down, the carbon intensity recorded with a "
-    "decision, whether latency changed after an optimization, and which "
-    "recommendations the safety policy rejected."
+    "decision, current workload status, recent latency, whether latency changed "
+    "after an optimization, and which recommendations the safety policy rejected."
 )
 
 
@@ -90,7 +90,9 @@ class GreenOpsChat:
             QueryIntent.DECISIONS_IN_RANGE: self._answer_decisions,
             QueryIntent.WHY_SCALED_DOWN: self._answer_why_scaled_down,
             QueryIntent.CARBON_AT_TIME: self._answer_carbon,
+            QueryIntent.LATENCY_AT_TIME: self._answer_latency_window,
             QueryIntent.LATENCY_AFTER_OPTIMIZATION: self._answer_latency,
+            QueryIntent.CURRENT_STATUS: self._answer_current_status,
             QueryIntent.REJECTED_BY_POLICY: self._answer_rejected,
         }[intent]
         return await handler(time_range)
@@ -110,6 +112,9 @@ class GreenOpsChat:
         ):
             return QueryIntent.REJECTED_BY_POLICY
 
+        if re.search(r"\bcurrent\b|\bstatus\b|\bnow\b|right now|can you see", s):
+            return QueryIntent.CURRENT_STATUS
+
         scaled_down = re.search(
             r"scale[ -]?down|scaled[ -]?down|downscale|reduce.*replica|"
             r"scal\w+ .*\bdown\b|fewer replica",
@@ -118,10 +123,13 @@ class GreenOpsChat:
         if scaled_down and ("why" in s or "reason" in s or "explain" in s or "because" in s):
             return QueryIntent.WHY_SCALED_DOWN
 
-        if re.search(r"latency|p99|p50|response time|slower|tail latency", s) and re.search(
-            r"after|following|post|increase|impact|regress|change|worse|did .* go up", s
-        ):
-            return QueryIntent.LATENCY_AFTER_OPTIMIZATION
+        if re.search(r"latency|p99|p50|response time|slower|tail latency", s):
+            if re.search(
+                r"after|following|post|increase|impact|regress|change|worse|did .* go up",
+                s,
+            ):
+                return QueryIntent.LATENCY_AFTER_OPTIMIZATION
+            return QueryIntent.LATENCY_AT_TIME
 
         if "carbon" in s or "gco2" in s or "grid intensity" in s or "emissions intensity" in s:
             return QueryIntent.CARBON_AT_TIME
@@ -361,6 +369,43 @@ class GreenOpsChat:
             data_complete=True,
         )
 
+    async def _answer_latency_window(self, tr: TimeRange) -> GroundedAnswer:
+        if self._metrics is None:
+            return GroundedAnswer(
+                text=(
+                    f"Latency metrics for {tr.label} require Prometheus, but this "
+                    "chat session was started without metrics access."
+                ),
+                intent=QueryIntent.LATENCY_AT_TIME,
+                time_range=tr,
+                data_complete=False,
+                unanswered_reason="metrics backend unavailable",
+            )
+
+        mw = await self._metrics.p99_latency(tr)
+        if not mw.available:
+            return GroundedAnswer(
+                text=(
+                    f"P99 latency for {tr.label} is unavailable — Prometheus did "
+                    f"not return samples ({mw.reason})."
+                ),
+                intent=QueryIntent.LATENCY_AT_TIME,
+                time_range=tr,
+                data_complete=False,
+                unanswered_reason=f"latency metric unavailable: {mw.reason}",
+            )
+        return GroundedAnswer(
+            text=(
+                f"P99 latency over {tr.label}: mean {_secs(mw.mean)}, "
+                f"min {_secs(mw.minimum)}, max {_secs(mw.maximum)} "
+                f"across {len(mw.points)} samples."
+            ),
+            intent=QueryIntent.LATENCY_AT_TIME,
+            evidence=[_metric_evidence(mw)],
+            time_range=tr,
+            data_complete=True,
+        )
+
     async def _answer_latency(self, tr: TimeRange) -> GroundedAnswer:
         sl = self._history.slice(tr)
         if (guard := self._no_history(QueryIntent.LATENCY_AFTER_OPTIMIZATION, tr, sl)) is not None:
@@ -430,6 +475,53 @@ class GreenOpsChat:
             evidence=evidence,
             time_range=tr,
             data_complete=sl.complete,
+        )
+
+    async def _answer_current_status(self, tr: TimeRange) -> GroundedAnswer:
+        if self._metrics is None:
+            return GroundedAnswer(
+                text=(
+                    "Current status requires Prometheus, but this chat session "
+                    "was started without metrics access."
+                ),
+                intent=QueryIntent.CURRENT_STATUS,
+                time_range=tr,
+                data_complete=False,
+                unanswered_reason="metrics backend unavailable",
+            )
+
+        status = await self._metrics.current_status()
+        evidence = [_metric_evidence(window) for window in status.values() if window.available]
+
+        def value(name: str) -> float | None:
+            window = status[name]
+            return window.last[1] if window.available and window.last else None
+
+        missing = [name for name, window in status.items() if not window.available]
+        text = (
+            "Current GreenOps status from Prometheus:\n"
+            f"- Carbon intensity: {_num(value('carbon_intensity_gco2_kwh'))} gCO2eq/kWh; "
+            f"renewable share: {_num(value('renewable_percentage'))}%.\n"
+            f"- Replicas: ready {_num(value('replica_count_ready'))} / desired "
+            f"{_num(value('replica_count_desired'))}; availability "
+            f"{_num(value('pod_availability_ratio'), '{:.2f}')}.\n"
+            f"- Pod restart rate: {_num(value('pod_restart_rate'), '{:.4f}')} restarts/s.\n"
+            f"- HTTP: {_num(value('http_request_rate_rps'), '{:.2f}')} rps, "
+            f"5xx {_num(value('http_error_rate_rps'), '{:.2f}')} rps, "
+            f"p99 latency {_secs(value('http_p99_latency_seconds'))}.\n"
+            f"- Node: CPU utilization {_num(value('node_cpu_utilization_ratio'), '{:.2f}')}, "
+            f"memory available {_num(value('node_memory_available_bytes'))} bytes."
+        )
+        if missing:
+            text += "\nMissing signals: " + ", ".join(sorted(missing)) + "."
+
+        return GroundedAnswer(
+            text=text,
+            intent=QueryIntent.CURRENT_STATUS,
+            evidence=evidence,
+            time_range=tr,
+            data_complete=not missing,
+            unanswered_reason=None if evidence else "no current metrics available",
         )
 
     async def _answer_rejected(self, tr: TimeRange) -> GroundedAnswer:

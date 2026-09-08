@@ -14,7 +14,9 @@ class QueryIntent(StrEnum):
     DECISIONS_IN_RANGE = "decisions_in_range"
     WHY_SCALED_DOWN = "why_scaled_down"
     CARBON_AT_TIME = "carbon_at_time"
+    LATENCY_AT_TIME = "latency_at_time"
     LATENCY_AFTER_OPTIMIZATION = "latency_after_optimization"
+    CURRENT_STATUS = "current_status"
     REJECTED_BY_POLICY = "rejected_by_policy"
     UNKNOWN = "unknown"
 

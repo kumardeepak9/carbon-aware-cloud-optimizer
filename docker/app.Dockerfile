@@ -1,9 +1,3 @@
-# =============================================================================
-# GreenOps Demo Workload — Dockerfile
-# =============================================================================
-# Multi-stage build: builder installs deps; final image is minimal.
-# Runs as a non-root user (uid 1001) with a read-only filesystem.
-# =============================================================================
 
 # ---------------------------------------------------------------------------
 # Stage 1: dependency builder
@@ -31,7 +25,7 @@ FROM python:3.11-slim AS runtime
 
 LABEL org.opencontainers.image.title="greenops-demo-workload"
 LABEL org.opencontainers.image.description="GreenOps AI demo workload — exposes health, metrics, and load-test endpoints."
-LABEL org.opencontainers.image.source="https://github.com/your-org/carbon-aware-cloud-optimizer"
+LABEL org.opencontainers.image.source="https://github.com/kumardeepak9/carbon-aware-cloud-optimizer"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

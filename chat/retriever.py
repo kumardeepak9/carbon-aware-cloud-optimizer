@@ -8,6 +8,7 @@ paper over with a guess.
 
 from __future__ import annotations
 
+import asyncio
 import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -21,7 +22,7 @@ try:  # monitoring is a hard dependency, but keep the import failure legible
         PrometheusClient,
         PrometheusError,
     )
-    from monitoring.queries import GreenOpsQueries
+    from monitoring.queries import GreenOpsQueries, QuerySpec
 except ImportError as exc:  # pragma: no cover
     raise ImportError("chat.retriever requires the `monitoring` package") from exc
 
@@ -191,6 +192,61 @@ class MetricRetriever:
     ) -> MetricWindow:
         """Range-query any PromQL expression over a window (for report summaries)."""
         return await self._range(metric, expr, time_range.start, time_range.end, step)
+
+    async def instant(self, spec: QuerySpec) -> MetricWindow:
+        """Instant-query one Prometheus expression and return numeric samples."""
+        try:
+            resp = await self._client.instant_query(spec.expr)
+            vector = resp.as_vector()
+        except EmptyResultError:
+            return MetricWindow(
+                spec.name, spec.expr, available=False, reason="Prometheus returned no samples"
+            )
+        except PrometheusError as exc:
+            return MetricWindow(
+                spec.name, spec.expr, available=False, reason=f"Prometheus error: {exc}"
+            )
+        except (ValueError, TypeError) as exc:
+            return MetricWindow(
+                spec.name,
+                spec.expr,
+                available=False,
+                reason=f"unreadable Prometheus response: {exc}",
+            )
+
+        points: list[tuple[float, float]] = []
+        for sample in vector.result:
+            try:
+                value = float(sample.value[1])
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(value):
+                points.append((float(sample.value[0]), value))
+
+        if not points:
+            return MetricWindow(
+                spec.name, spec.expr, available=False, reason="Prometheus returned an empty series"
+            )
+        return MetricWindow(spec.name, spec.expr, available=True, points=points)
+
+    async def current_status(self) -> dict[str, MetricWindow]:
+        """Read current operational, Kubernetes, node, and carbon signals."""
+        specs = [
+            self._queries.replica_count_desired(),
+            self._queries.replica_count_ready(),
+            self._queries.pod_availability_ratio(),
+            self._queries.pod_restart_rate(),
+            self._queries.http_request_rate(),
+            self._queries.http_error_rate(),
+            self._queries.http_p99_latency_seconds(),
+            self._queries.node_cpu_utilization(),
+            self._queries.node_memory_available_bytes(),
+            self._queries.carbon_intensity_gco2_kwh(),
+            self._queries.renewable_percentage(),
+            self._queries.carbon_data_available(),
+        ]
+        windows = await asyncio.gather(*(self.instant(spec) for spec in specs))
+        return {window.metric: window for window in windows}
 
     async def carbon_intensity(self, time_range: TimeRange, *, step: str = "5m") -> MetricWindow:
         spec = self._queries.carbon_intensity_gco2_kwh()

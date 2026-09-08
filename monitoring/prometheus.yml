@@ -1,21 +1,12 @@
-# =============================================================================
+# ==========================================
 # Prometheus — Scrape Configuration
-# =============================================================================
-# This file is mounted into the Prometheus container (see docker-compose.yml).
-# Targets:
-#   1. GreenOps demo workload (pull-based via pod annotations)
-#   2. kube-state-metrics (Deployment/ReplicaSet/Pod state)
-#   3. node-exporter (Node CPU, memory, disk)
-#   4. Prometheus itself (self-scrape)
-#   5. Carbon exporter (Electricity Maps → Prometheus)
-# =============================================================================
+
 
 global:
-  scrape_interval:     15s     # Default scrape frequency
-  evaluation_interval: 15s     # Rule evaluation frequency
+  scrape_interval:     15s
+  evaluation_interval: 15s
   scrape_timeout:      10s
 
-  # Labels attached to every time-series (used to identify the cluster)
   external_labels:
     cluster: "greenops-local"
     env: "development"
@@ -28,19 +19,15 @@ alerting:
     - static_configs:
         - targets: []   # Alertmanager not required for local dev
 
-# ---------------------------------------------------------------------------
-# Recording & alert rules
-# ---------------------------------------------------------------------------
+
 rule_files:
   - "rules/greenops_recording.yml"
   - "rules/greenops_alerts.yml"
 
-# ---------------------------------------------------------------------------
-# Scrape configurations
-# ---------------------------------------------------------------------------
+
 scrape_configs:
 
-  # ── 1. GreenOps demo workload ────────────────────────────────────────────
+  # ── 1. GreenOps demo workload: Docker Compose ───────────────────────────
   - job_name: "greenops-demo-workload"
     static_configs:
       - targets: ["workload:8080"]   # Docker Compose service name
@@ -51,46 +38,41 @@ scrape_configs:
       - target_label: deployment
         replacement: greenops-demo-workload
 
-  # ── 2. kube-state-metrics ────────────────────────────────────────────────
-  # Provides: kube_deployment_*, kube_pod_*, kube_node_*, etc.
-  # Install: kubectl apply -f https://github.com/kubernetes/kube-state-metrics/releases
-  #
-  # NOTE: this target does NOT exist in the docker-compose stack — there is no
-  # Kubernetes API for it to read. It resolves only when this config is used by
-  # a Prometheus running in (or federated from) a real cluster. Without it the
-  # agent's replica_count_*, *_request_ratio and pod_restart_rate inputs are
-  # empty and DecisionPolicy defers. See monitoring/README.md.
+  # ── 2. GreenOps demo workload: kind ──────────────────────────────────────
+
+  - job_name: "greenops-k8s-demo-workload"
+    static_configs:
+      - targets: ["host.docker.internal:18000"]
+    metrics_path: /metrics
+    relabel_configs:
+      - target_label: namespace
+        replacement: greenops-dev
+      - target_label: deployment
+        replacement: greenops-demo-workload
+
+  # ── 3. kube-state-metrics ────────────────────────────────────────────────
+
   - job_name: "kube-state-metrics"
     static_configs:
-      - targets: ["kube-state-metrics:8080"]
+      - targets: ["host.docker.internal:18080"]
     honor_labels: true
 
-  # ── 3. node-exporter ─────────────────────────────────────────────────────
-  # Provides: node_cpu_*, node_memory_*, node_filesystem_*, etc.
-  # Install via Helm: helm install node-exporter prometheus-community/prometheus-node-exporter
-  # Also absent from docker-compose. node_cpu_utilization_ratio is a REQUIRED
-  # agent signal, so a cluster deployment must include node-exporter.
+  # ── 4. node-exporter ─────────────────────────────────────────────────────
+
   - job_name: "node-exporter"
     static_configs:
-      - targets: ["node-exporter:9100"]
+      - targets: ["host.docker.internal:19100"]
 
-  # ── 4. Prometheus self-scrape ─────────────────────────────────────────────
+  # ── 5. Prometheus self-scrape ─────────────────────────────────────────────
   - job_name: "prometheus"
     static_configs:
       - targets: ["localhost:9090"]
 
-  # ── 5. Carbon metrics exporter (Electricity Maps → Prometheus) ────────────
-  # Exposes: greenops_carbon_intensity_gco2_per_kwh, greenops_carbon_renewable_percentage,
-  #          greenops_carbon_fossil_fuel_percentage, greenops_carbon_low_carbon_percentage,
-  #          greenops_carbon_last_update_timestamp_seconds, greenops_carbon_data_available,
-  #          greenops_carbon_scrape_errors_total, greenops_carbon_scrape_duration_seconds
-  #
-  # scrape_interval is set to 60s (matching AGENT_POLL_INTERVAL_SECONDS default).
-  # Scraping more frequently than the Electricity Maps cache TTL (300s) wastes
-  # resources — values change at most every 5 minutes.
+  # ── 6. Carbon metrics exporter (Electricity Maps → Prometheus) ────────────
+
   - job_name: "greenops-carbon-exporter"
     static_configs:
-      - targets: ["carbon-exporter:8002"]   # Carbon exporter pull endpoint (port 8002)
+      - targets: ["carbon-exporter:8002"]
     metrics_path: /metrics
     scrape_interval: 60s
     scrape_timeout: 15s

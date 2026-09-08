@@ -15,7 +15,7 @@ metadata:
       This is the entry-point for bootstrapping the entire GreenOps
       GitOps platform configuration from a single kubectl apply.
 spec:
-  project: default  # platform app lives in default project (not greenops)
+  project: default
 
   source:
     repoURL: https://github.com/kumardeepak9/carbon-aware-cloud-optimizer.git
@@ -23,10 +23,6 @@ spec:
     path: argocd
     directory:
       recurse: true
-      # Manage ONLY the AppProject and the workload Applications. This must not
-      # pick up argocd/install/kustomization.yaml (kind: Kustomization is not a
-      # cluster resource), argocd/app-of-apps.yaml (self-management + prune is
-      # unsafe) or the repo-secret template.
       include: "{project.yaml,applications/*.yaml}"
 
   destination:
@@ -38,5 +34,5 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=false   # argocd namespace must already exist
-      - ServerSideApply=true    # required for CRDs managed by Argo CD itself
+      - CreateNamespace=false
+      - ServerSideApply=true

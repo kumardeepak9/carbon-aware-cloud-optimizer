@@ -1,97 +1,81 @@
 # =============================================================================
-# Carbon-Aware Cloud Optimizer — Developer Shortcuts
+# GreenOps AI - Developer Shortcuts
 # =============================================================================
 .DEFAULT_GOAL := help
-SHELL         := /bin/bash
-PYTHON        := python3
-PIP           := $(PYTHON) -m pip
+SHELL := /bin/bash
+PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
+PIP := $(PYTHON) -m pip
 
-# Colour helpers
-GREEN  := \033[0;32m
+GREEN := \033[0;32m
 YELLOW := \033[0;33m
-RESET  := \033[0m
+RESET := \033[0m
 
 .PHONY: help install install-dev lint format type-check test test-unit \
-        test-integration coverage clean docker-up docker-down \
-        docker-build agent health gitops report chat
+	test-integration coverage clean docker-up docker-down docker-build \
+	agent health gitops report chat chat-agent
 
-help:  ## Show this help message
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-	  awk 'BEGIN {FS = ":.*?## "}; {printf "$(GREEN)%-22s$(RESET) %s\n", $$1, $$2}'
+help: ## Show this help message
+	@grep -E '^[a-zA-Z_-]+:.*? ## .*$$' $(MAKEFILE_LIST) | \
+	  awk 'BEGIN {FS = ":.*? ## "}; {printf "$(GREEN)%-22s$(RESET) %s\n", $$1, $$2}'
 
-# ---------------------------------------------------------------------------
-# Setup
-# ---------------------------------------------------------------------------
-install:  ## Install production dependencies
+install: ## Install production dependencies
 	$(PIP) install -e .
 
-install-dev:  ## Install all dependencies including dev tools
+install-dev: ## Install development dependencies
 	$(PIP) install -e ".[dev]"
 	pre-commit install
 
-# ---------------------------------------------------------------------------
-# Code quality
-# ---------------------------------------------------------------------------
-lint:  ## Run ruff linter
-	ruff check .
+lint: ## Run ruff lint checks
+	$(PYTHON) -m ruff check .
 
-format:  ## Auto-format with ruff
-	ruff format .
+format: ## Format Python code with ruff
+	$(PYTHON) -m ruff format .
 
-type-check:  ## Run mypy static type checker
-	mypy . --exclude tests/
+type-check: ## Run mypy static type checks
+	$(PYTHON) -m mypy . --exclude tests/
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
-test:  ## Run full test suite
-	pytest
+test: ## Run the full test suite
+	$(PYTHON) -m pytest
 
-test-unit:  ## Run unit tests only
-	pytest tests/unit/ -v
+test-unit: ## Run unit tests
+	$(PYTHON) -m pytest tests/unit/ -v
 
-test-integration:  ## Run integration tests only
-	pytest tests/integration/ -v
+test-integration: ## Run integration tests
+	$(PYTHON) -m pytest tests/integration/ -v
 
-coverage:  ## Generate HTML coverage report
-	pytest --cov=. --cov-report=html
+coverage: ## Generate HTML coverage report
+	$(PYTHON) -m pytest --cov=. --cov-report=html
 	@echo "$(YELLOW)Coverage report: htmlcov/index.html$(RESET)"
 
-# ---------------------------------------------------------------------------
-# Docker
-# ---------------------------------------------------------------------------
-docker-up:  ## Start local dev stack (Prometheus + Grafana + agent)
-	docker compose up -d
+docker-up: ## Start the local Docker Compose stack
+	docker compose up -d --build
 
-docker-down:  ## Stop local dev stack
+docker-down: ## Stop the local Docker Compose stack
 	docker compose down
 
-docker-build:  ## Build all Docker images
+docker-build: ## Build Docker Compose images
 	docker compose build
 
-# ---------------------------------------------------------------------------
-# Runtime
-# ---------------------------------------------------------------------------
-agent:  ## Run the GreenOps AI agent locally
+agent: ## Run one read-only GreenOps recommendation cycle
 	$(PYTHON) -m agent.agent
 
-health:  ## Run read-only GreenOps integration health checks
+health: ## Run read-only integration health checks
 	$(PYTHON) -m agent.health_cli
 
-gitops:  ## Prepare a review-first GreenOps GitOps change
+gitops: ## Prepare a review-first GreenOps GitOps change
 	$(PYTHON) -m gitops.cli
 
-report:  ## Generate a GreenOps weekly report
+report: ## Generate the weekly GreenOps report
 	$(PYTHON) -m reports.report
 
-chat:  ## Ask the GreenOps chat interface (Q="your question")
+chat: ## Ask one GreenOps chat question with Q="..."
 	$(PYTHON) -m chat.cli "$(Q)"
 
-# ---------------------------------------------------------------------------
-# Housekeeping
-# ---------------------------------------------------------------------------
-clean:  ## Remove build artifacts and caches
-	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	find . -type f -name "*.pyc" -delete
-	rm -rf .mypy_cache .ruff_cache .pytest_cache htmlcov .coverage dist build *.egg-info
+chat-agent: ## Start the interactive GreenOps chat helper, or pass ARGS="..."
+	$(PYTHON) scripts/chat_agent.py $(ARGS)
+
+clean: ## Remove local caches and generated build/test artifacts
+	find . -path ./.venv -prune -o -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -path ./.venv -prune -o -type f -name "*.pyc" -delete
+	rm -rf .mypy_cache .ruff_cache .pytest_cache htmlcov .coverage dist build *.egg-info reports/output
 	@echo "$(GREEN)Clean.$(RESET)"

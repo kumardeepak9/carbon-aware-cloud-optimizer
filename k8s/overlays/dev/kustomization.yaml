@@ -1,29 +1,22 @@
-# =============================================================================
+# ===========================================
 # Kustomization — dev overlay
-# =============================================================================
-# Dev is lightweight: 1 replica, relaxed resource limits, debug log level.
-# Apply with:
-#   kubectl apply -k k8s/overlays/dev
-# =============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Dev runs in its own namespace so the dev and prod Argo CD Applications never
-# manage the same live objects on a shared cluster. Prod keeps `greenops`
-# (the namespace the monitoring stack and the agent's default config target).
+
 namespace: greenops-dev
 
 resources:
   - ../../base
 
 # ── Image overrides ───────────────────────────────────────────────────────────
-# In dev, use the locally-built image pulled from a local registry.
+
 images:
   - name: greenops-demo-workload
     newTag: dev
 
 # ── Common labels for this environment ───────────────────────────────────────
-# Kept out of selectors (immutable) — this is an identifying label only.
 labels:
   - pairs:
       greenops.io/env: dev
@@ -32,7 +25,6 @@ labels:
 
 # ── Patches ──────────────────────────────────────────────────────────────────
 patches:
-  # 1. Replica count — GreenOps AI will modify this value via GitOps commits.
   - target:
       kind: Deployment
       name: greenops-demo-workload

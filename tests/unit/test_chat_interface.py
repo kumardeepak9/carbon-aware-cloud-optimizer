@@ -144,6 +144,7 @@ class TestTimeParsing:
             ("what happened last week?", "last week"),
             ("decisions in the last 3 days", "last 3 days"),
             ("what did you do yesterday", "yesterday"),
+            ("what was the latency last night?", "last night"),
             ("activity this month", "this month"),
             ("from 2026-08-01 to 2026-08-07", "2026-08-01 to 2026-08-07"),
             ("on 2026-08-20", "2026-08-20"),
@@ -158,6 +159,12 @@ class TestTimeParsing:
     def test_no_period_uses_default(self):
         tr = parse_time_range("what decisions did you make?", now=NOW, default_days=7)
         assert (NOW - tr.start).days == 7
+
+    def test_last_optimization_uses_default_window(self):
+        tr = parse_time_range(
+            "Did latency change after the last optimization?", now=NOW, default_days=7
+        )
+        assert tr.label == "last 7 days"
 
     def test_no_period_can_be_required(self):
         with pytest.raises(InvalidDateRangeError):
@@ -258,6 +265,7 @@ class TestMissingHistory:
             "Why did you scale down the workload?",
             "Were any recommendations rejected by policy?",
             "Did latency increase after the optimization?",
+            "Did latency change after the last optimization?",
         ],
     )
     async def test_empty_store_is_reported_not_guessed(self, store, q):
@@ -459,6 +467,20 @@ class TestAntiFabrication:
         assert not a.answered
         assert "can't map that question" in a.text.lower() or "can answer" in a.text.lower()
         assert a.evidence == []
+
+    @pytest.mark.asyncio
+    async def test_current_status_is_recognised(self, store):
+        a = await _ask(store, "whats the current status?")
+        assert a.intent is QueryIntent.CURRENT_STATUS
+        assert not a.answered
+        assert a.unanswered_reason == "metrics backend unavailable"
+
+    @pytest.mark.asyncio
+    async def test_plain_latency_window_is_recognised(self, store):
+        a = await _ask(store, "what was the latency last night?")
+        assert a.intent is QueryIntent.LATENCY_AT_TIME
+        assert not a.answered
+        assert a.unanswered_reason == "metrics backend unavailable"
 
 
 # ---------------------------------------------------------------------------

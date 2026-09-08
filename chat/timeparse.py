@@ -54,9 +54,12 @@ def has_time_expression(text: str) -> bool:
     """True if the text contains anything this module would try to resolve."""
     lowered = text.lower()
     keywords = (
-        "last ",
         "past ",
         "previous ",
+        "last night",
+        "last day",
+        "last week",
+        "last month",
         "yesterday",
         "today",
         "this week",
@@ -182,6 +185,11 @@ def _single_day(text: str, lowered: str, now: datetime) -> TimeRange | None:
     if "yesterday" in lowered:
         start = _day(now) - timedelta(days=1)
         return TimeRange(start=start, end=start + timedelta(days=1), label="yesterday")
+    if "last night" in lowered:
+        today = _day(now)
+        start = today - timedelta(hours=6)
+        end = min(today + timedelta(hours=6), now)
+        return TimeRange(start=start, end=end, label="last night")
     if "today" in lowered:
         start = _day(now)
         return TimeRange(start=start, end=now, label="today")

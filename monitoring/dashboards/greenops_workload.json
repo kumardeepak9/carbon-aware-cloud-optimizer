@@ -26,12 +26,12 @@
         "type": "datasource"
       },
       {
-        "current": { "selected": false, "text": "greenops", "value": "greenops" },
+        "current": { "selected": false, "text": "greenops-dev", "value": "greenops-dev" },
         "hide": 0,
         "label": "Namespace",
         "name": "namespace",
-        "options": [{ "selected": true, "text": "greenops", "value": "greenops" }],
-        "query": "greenops",
+        "options": [{ "selected": true, "text": "greenops-dev", "value": "greenops-dev" }],
+        "query": "greenops-dev",
         "skipUrlSync": false,
         "type": "custom"
       },

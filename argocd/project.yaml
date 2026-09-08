@@ -3,7 +3,6 @@ kind: AppProject
 metadata:
   name: greenops
   namespace: argocd
-  # Finalizer prevents deletion while Applications reference this project
   finalizers:
     - resources-finalizer.argocd.argoproj.io
   annotations:
@@ -20,14 +19,10 @@ spec:
     changes committed by the GreenOps GitOps workflow appear here.
 
   # ── Source repositories ─────────────────────────────────────────────────────
-  # Restrict to exactly one repository. All other repositories are denied.
   sourceRepos:
     - https://github.com/kumardeepak9/carbon-aware-cloud-optimizer.git
 
   # ── Destination clusters and namespaces ─────────────────────────────────────
-  # Only the in-cluster server, and only the two GreenOps workload namespaces
-  # (prod -> greenops, dev -> greenops-dev). Everything else — kube-system,
-  # argocd, default, … — is denied.
   destinations:
     - server: https://kubernetes.default.svc
       namespace: greenops
@@ -35,17 +30,11 @@ spec:
       namespace: greenops-dev
 
   # ── Cluster resource access ──────────────────────────────────────────────────
-  # Allow only Namespace at the cluster level (so Argo CD can create/manage it).
-  # All other cluster-scoped resources (Nodes, ClusterRoles, etc.) are denied.
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
 
   # ── Namespace resource access ────────────────────────────────────────────────
-  # Allow only the namespaced resource kinds used by the GreenOps workload.
-  # This prevents a future repo change from introducing Secrets, Roles,
-  # RoleBindings, ServiceAccounts, Jobs, or other privilege-bearing resources
-  # through these workload Applications.
   namespaceResourceWhitelist:
     - group: ""
       kind: ConfigMap
@@ -55,16 +44,5 @@ spec:
       kind: Deployment
 
   # ── Orphan resource monitoring ───────────────────────────────────────────────
-  # Alert on resources that exist in the namespace but are not in Git.
   orphanedResources:
     warn: true
-
-  # ── Sync window ──────────────────────────────────────────────────────────────
-  # Allow syncs at all times — the GreenOps agent controls timing via Git commits.
-  # Uncomment to restrict to business hours only:
-  # syncWindows:
-  #   - kind: allow
-  #     schedule: "0 8 * * 1-5"
-  #     duration: 8h
-  #     applications:
-  #       - "*"

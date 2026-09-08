@@ -1,26 +1,9 @@
-# =============================================================================
+# =========================================
 # Carbon-Aware Cloud Optimizer — Local Development Stack
-# =============================================================================
-# Spins up: demo workload, carbon exporter, Prometheus, Grafana
-#
-# Port allocation:
-#   8000 → Demo workload metrics (greenops_demo_*)
-#   8002 → Carbon exporter metrics (greenops_carbon_*)
-#   9090 → Prometheus
-#   3000 → Grafana
-#
-# Usage:
-#   docker compose up -d                    # start full stack
-#   docker compose logs -f carbon-exporter # stream carbon exporter logs
-#   docker compose logs -f workload         # stream workload logs
-#   docker compose down                     # stop
-# =============================================================================
-
 services:
-
-  # ---------------------------------------------------------------------------
+  # ---------------------------------------
   # GreenOps Demo Workload
-  # ---------------------------------------------------------------------------
+
   workload:
     build:
       context: .
@@ -30,7 +13,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=${LOG_FORMAT:-json}
     ports:
-      - "8000:8080"    # Demo workload HTTP + metrics (greenops_demo_*)
+      - "8000:8080"
     read_only: true
     tmpfs:
       - /tmp
@@ -43,15 +26,8 @@ services:
     networks:
       - greenops
 
-  # ---------------------------------------------------------------------------
+  # --------------------------------------
   # GreenOps Carbon Exporter
-  # ---------------------------------------------------------------------------
-  # Fetches Electricity Maps data on a 60-second schedule and serves
-  # greenops_carbon_* Prometheus metrics on port 8002.
-  #
-  # Runs as a separate service so it can be scaled, restarted, and monitored
-  # independently of the AI agent.
-  # ---------------------------------------------------------------------------
   carbon-exporter:
     build:
       context: .
@@ -60,12 +36,11 @@ services:
       - path: .env
         required: false
     environment:
-      # REQUIRED — the exporter refuses to start without a real key (fail fast).
       - ELECTRICITY_MAPS_API_KEY=${ELECTRICITY_MAPS_API_KEY:?set ELECTRICITY_MAPS_API_KEY in .env}
       - ELECTRICITY_MAPS_ZONE=${ELECTRICITY_MAPS_ZONE:-DE}
       - AGENT_POLL_INTERVAL_SECONDS=${AGENT_POLL_INTERVAL_SECONDS:-60}
     ports:
-      - "8002:8002"    # Carbon metrics scrape endpoint (greenops_carbon_*)
+      - "8002:8002"
     read_only: true
     tmpfs:
       - /tmp
@@ -77,9 +52,9 @@ services:
     networks:
       - greenops
 
-  # ---------------------------------------------------------------------------
+  # -----------------------------------------
   # Prometheus
-  # ---------------------------------------------------------------------------
+
   prometheus:
     image: prom/prometheus:v2.52.0
     volumes:
@@ -93,6 +68,8 @@ services:
       - "--web.console.libraries=/etc/prometheus/console_libraries"
     ports:
       - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     cap_drop:
       - ALL
     security_opt:
@@ -101,14 +78,8 @@ services:
     networks:
       - greenops
 
-  # ---------------------------------------------------------------------------
+  # --------------------------------------
   # Grafana
-  # ---------------------------------------------------------------------------
-  # Provisioning auto-loads:
-  #   - Prometheus datasource (uid: prometheus, required for ${DS_PROMETHEUS} templates)
-  #   - GreenOps AI dashboard from monitoring/dashboards/greenops_main.json
-  # Set GRAFANA_ADMIN_PASSWORD in .env before starting Grafana.
-  # ---------------------------------------------------------------------------
   grafana:
     image: grafana/grafana:10.4.3
     environment:
@@ -118,11 +89,8 @@ services:
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/greenops_main.json
     volumes:
       - grafana_data:/var/lib/grafana
-      # Provisioning: datasource config (creates Prometheus datasource automatically)
       - ./monitoring/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      # Provisioning: dashboard provider config (tells Grafana where to find JSON files)
       - ./monitoring/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      # Dashboard JSON files (watched by the provider above)
       - ./monitoring/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3000:3000"
@@ -137,16 +105,12 @@ services:
       - greenops
 
 
-# ---------------------------------------------------------------------------
+
 # Volumes
-# ---------------------------------------------------------------------------
 volumes:
   prometheus_data:
   grafana_data:
-
-# ---------------------------------------------------------------------------
 # Networks
-# ---------------------------------------------------------------------------
 networks:
   greenops:
     driver: bridge

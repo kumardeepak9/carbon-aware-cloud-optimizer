@@ -182,7 +182,7 @@ def test_production_rejects_placeholder_github_token_when_pr_enabled(
 def test_production_allows_pr_creation_with_a_real_token(prod_env: pytest.MonkeyPatch) -> None:
     prod_env.setenv("GREENOPS_GITOPS_CREATE_PULL_REQUEST", "true")
     prod_env.setenv("GREENOPS_GITOPS_GITHUB_REPOSITORY", "acme/carbon-aware-cloud-optimizer")
-    prod_env.setenv("GREENOPS_GITOPS_GITHUB_TOKEN", "ghp_realtokenvalue0123456789")
+    prod_env.setenv("GREENOPS_GITOPS_GITHUB_TOKEN", "non-placeholder-test-token")
     Settings()  # must not raise
 
 

@@ -1,12 +1,7 @@
-# =============================================================================
+# ======================================
 # Kustomization — prod overlay
-# =============================================================================
-# Production: 3 replicas by default, full resource allocation, JSON logging.
-# The GreenOps AI agent scales this between 1–6 replicas based on carbon
-# intensity, committing changes to this file via GitOps.
-# Apply with:
-#   kubectl apply -k k8s/overlays/prod
-# =============================================================================
+
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -16,14 +11,14 @@ resources:
   - ../../base
 
 # ── Image overrides ───────────────────────────────────────────────────────────
-# Tag is updated by CI on every successful build.
+
 images:
   - name: greenops-demo-workload
-    newName: ghcr.io/your-org/greenops-demo-workload
+    newName: ghcr.io/kumardeepak9/greenops-demo-workload
     newTag: 0.1.0
 
 # ── Common labels for this environment ───────────────────────────────────────
-# Kept out of selectors (immutable) — this is an identifying label only.
+
 labels:
   - pairs:
       greenops.io/env: prod
@@ -33,8 +28,6 @@ labels:
 # ── Patches ──────────────────────────────────────────────────────────────────
 patches:
   # 1. Replica count
-  # ⚡ GreenOps AI agent modifies this value automatically via GitOps commits.
-  #    Range: 1 (high carbon / low demand) → 6 (low carbon / high demand)
   - target:
       kind: Deployment
       name: greenops-demo-workload

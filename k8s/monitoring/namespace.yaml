@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: greenops-monitoring
+  labels:
+    app.kubernetes.io/part-of: greenops
+    app.kubernetes.io/component: monitoring
