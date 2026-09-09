@@ -31,8 +31,6 @@ from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------
 # Query metadata — used by the AI agent to interpret results
-# ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class QuerySpec:
@@ -52,8 +50,6 @@ class QuerySpec:
 
 # ---------------------------------------------------------------------------
 # Query registry
-# ---------------------------------------------------------------------------
-
 
 class GreenOpsQueries:
     """
@@ -92,7 +88,6 @@ class GreenOpsQueries:
 
     # ------------------------------------------------------------------
     # CPU
-    # ------------------------------------------------------------------
 
     def cpu_utilization(self) -> QuerySpec:
         """
@@ -136,7 +131,6 @@ class GreenOpsQueries:
 
     # ------------------------------------------------------------------
     # Memory
-    # ------------------------------------------------------------------
 
     def memory_utilization_bytes(self) -> QuerySpec:
         """Working-set memory consumed by workload pods."""
@@ -176,7 +170,7 @@ class GreenOpsQueries:
 
     # ------------------------------------------------------------------
     # Replica count & pod health
-    # ------------------------------------------------------------------
+    
 
     def replica_count_desired(self) -> QuerySpec:
         """Desired replica count from the Deployment spec."""
@@ -239,7 +233,6 @@ class GreenOpsQueries:
 
     # ------------------------------------------------------------------
     # HTTP request metrics (from demo workload)
-    # ------------------------------------------------------------------
 
     def http_request_rate(self) -> QuerySpec:
         """Total HTTP request rate across all workload pods.
@@ -315,7 +308,7 @@ class GreenOpsQueries:
 
     # ------------------------------------------------------------------
     # Node utilization
-    # ------------------------------------------------------------------
+    
 
     def node_cpu_utilization(self) -> QuerySpec:
         """Cluster-wide CPU utilization ratio across all nodes."""
@@ -340,7 +333,6 @@ class GreenOpsQueries:
 
     # ------------------------------------------------------------------
     # Carbon signal (from carbon ingestion layer)
-    # ------------------------------------------------------------------
 
     def carbon_intensity_gco2_kwh(self) -> QuerySpec:
         """
@@ -405,7 +397,7 @@ class GreenOpsQueries:
 
     # ------------------------------------------------------------------
     # Agent health
-    # ------------------------------------------------------------------
+
 
     def agent_poll_latency(self) -> QuerySpec:
         """Agent poll cycle duration — used to detect agent performance issues."""
@@ -422,7 +414,7 @@ class GreenOpsQueries:
 
     # ------------------------------------------------------------------
     # Convenience: all agent decision inputs
-    # ------------------------------------------------------------------
+   
 
     def all_decision_inputs(self) -> list[QuerySpec]:
         """

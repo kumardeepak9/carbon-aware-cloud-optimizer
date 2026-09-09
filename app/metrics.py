@@ -58,5 +58,5 @@ APP_READY = Gauge(
     documentation="1 if the application is ready to serve traffic, 0 otherwise.",
 )
 
-# Initialise to ready=1 on startup; the readiness handler updates this.
+# Initialise to ready=1 on startup; 
 APP_READY.set(1)

@@ -28,9 +28,7 @@ _ELECTRICITY_MAPS_ZONE_PATTERN = re.compile(r"^[A-Z0-9]{2,}(?:-[A-Z0-9]+)*$")
 _GIT_REF_COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 _GITHUB_REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
-# Values that mean "this was never filled in". A placeholder secret must never
-# reach a real credential check — reject it eagerly so misconfiguration fails
-# at startup rather than at the first authenticated request.
+
 _PLACEHOLDER_SECRETS = frozenset(
     {
         "",

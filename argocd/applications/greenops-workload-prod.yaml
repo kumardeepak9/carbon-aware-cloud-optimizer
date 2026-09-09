@@ -30,12 +30,6 @@ spec:
     namespace: greenops
 
   # ── Production sync policy ───────────────────────────────────────────────
-  # Auto-sync is deliberately DISABLED for production.
-  # Deployment path:
-  #   AI Agent → Safety Policy → GitHub PR → human review → merge → manual Argo CD sync
-  #
-  # To sync after a merge:
-  #   argocd app sync greenops-workload-prod --prune
   syncPolicy:
     syncOptions:
       - CreateNamespace=true

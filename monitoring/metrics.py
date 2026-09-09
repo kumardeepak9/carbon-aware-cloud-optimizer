@@ -11,7 +11,7 @@ from prometheus_client import Counter, Gauge, Histogram, Info
 
 # ---------------------------------------------------------------------------
 # Agent identity
-# ---------------------------------------------------------------------------
+
 AGENT_INFO = Info(
     name="greenops_agent",
     documentation="GreenOps AI Agent — version and configuration metadata.",
@@ -19,7 +19,6 @@ AGENT_INFO = Info(
 
 # ---------------------------------------------------------------------------
 # Poll cycle metrics
-# ---------------------------------------------------------------------------
 AGENT_POLL_TOTAL = Counter(
     name="greenops_agent_poll_total",
     documentation="Total number of agent poll cycles executed.",
@@ -34,7 +33,6 @@ AGENT_POLL_DURATION_SECONDS = Histogram(
 
 # ---------------------------------------------------------------------------
 # Decision metrics
-# ---------------------------------------------------------------------------
 AGENT_DECISIONS_TOTAL = Counter(
     name="greenops_agent_decisions_total",
     documentation="Total scaling decisions made by the agent.",
@@ -49,7 +47,6 @@ AGENT_REPLICA_TARGET = Gauge(
 
 # ---------------------------------------------------------------------------
 # Carbon signal tracking
-# ---------------------------------------------------------------------------
 AGENT_CARBON_INTENSITY = Gauge(
     name="greenops_agent_carbon_intensity_gco2_per_kwh",
     documentation=(
@@ -68,7 +65,6 @@ AGENT_CARBON_THRESHOLD_BREACHES = Counter(
 
 # ---------------------------------------------------------------------------
 # Prometheus collection health
-# ---------------------------------------------------------------------------
 AGENT_PROMETHEUS_QUERY_ERRORS = Counter(
     name="greenops_agent_prometheus_query_errors_total",
     documentation="Total Prometheus query errors encountered by the agent.",
@@ -92,7 +88,6 @@ AGENT_OBSERVATION_COMPLETENESS = Gauge(
 
 # ---------------------------------------------------------------------------
 # GitOps operation metrics
-# ---------------------------------------------------------------------------
 AGENT_GITOPS_COMMITS_TOTAL = Counter(
     name="greenops_agent_gitops_commits_total",
     documentation="Total review-first GitOps commits prepared by the agent.",
@@ -102,9 +97,6 @@ AGENT_GITOPS_COMMITS_TOTAL = Counter(
 
 # ---------------------------------------------------------------------------
 # Convenience class for dependency injection
-# ---------------------------------------------------------------------------
-
-
 class AgentMetrics:
     """
     Facade that groups all agent metric objects.
